@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { factorId, code } = body;
 
   if (!factorId || !code) {
-    console.error("[mfa-verify] Missing factorId or code", { factorId: !!factorId, code: !!code });
     return NextResponse.json(
       { error: "factorId and code are required" },
       { status: 400 }
     );
   }
 
-  const cookieStore = await cookies();
-  const allCookies = cookieStore.getAll();
-  console.log("[mfa-verify] Cookies present:", allCookies.map(c => c.name));
+  // Collect cookies that Supabase wants to set — we'll put them on the
+  // NextResponse ourselves instead of relying on cookies() from next/headers
+  const pendingCookies: {
+    name: string;
+    value: string;
+    options: Record<string, unknown>;
+  }[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,13 +26,14 @@ export async function POST(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return allCookies;
+          return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          console.log("[mfa-verify] setAll called with cookies:", cookiesToSet.map(c => c.name));
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
+          console.log(
+            "[mfa-verify] setAll called:",
+            cookiesToSet.map((c) => c.name)
           );
+          cookiesToSet.forEach((cookie) => pendingCookies.push(cookie));
         },
       },
     }
@@ -41,13 +44,12 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    console.error("[mfa-verify] No authenticated user found from cookies");
+    console.error("[mfa-verify] Not authenticated");
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  console.log("[mfa-verify] User authenticated:", user.id, user.email);
+  console.log("[mfa-verify] User:", user.email);
 
-  // Create challenge
   const { data: challenge, error: challengeError } =
     await supabase.auth.mfa.challenge({ factorId });
 
@@ -59,11 +61,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  console.log("[mfa-verify] Challenge created:", challenge.id);
-
-  // Verify the TOTP code — upgrades session to AAL2
-  // setAll callback fires here, writing AAL2 JWT to Set-Cookie headers
-  const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
+  const { error: verifyError } = await supabase.auth.mfa.verify({
     factorId,
     challengeId: challenge.id,
     code,
@@ -77,7 +75,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  console.log("[mfa-verify] MFA verified successfully. Session AAL should be aal2.");
+  console.log(
+    "[mfa-verify] Success. Pending cookies to set:",
+    pendingCookies.map((c) => c.name)
+  );
 
-  return NextResponse.json({ success: true, aal: "aal2" });
+  // Build the response and set cookies DIRECTLY on the NextResponse object
+  const response = NextResponse.json({ success: true });
+
+  for (const { name, value, options } of pendingCookies) {
+    response.cookies.set(name, value, options as Record<string, string>);
+  }
+
+  console.log(
+    "[mfa-verify] Response Set-Cookie count:",
+    response.headers.getSetCookie().length
+  );
+
+  return response;
 }

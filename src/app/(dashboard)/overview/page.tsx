@@ -1,10 +1,60 @@
-export default function OverviewPage() {
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { OverviewDashboard } from "@/components/overview-dashboard";
+
+export default async function OverviewPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    redirect("/personal");
+  }
+
+  const [
+    { data: accounts },
+    { data: bills },
+    { data: subscriptions },
+    { data: debts },
+    { data: recentTransactions },
+  ] = await Promise.all([
+    supabase.from("accounts").select("*").order("book"),
+    supabase
+      .from("bills")
+      .select("*")
+      .eq("status", "upcoming")
+      .order("due_date")
+      .limit(20),
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("is_active", true)
+      .order("next_charge_date")
+      .limit(20),
+    supabase.from("debts").select("*"),
+    supabase
+      .from("transactions")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(20),
+  ]);
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-foreground">Overview</h1>
-      <p className="mt-2 text-muted">
-        Net worth and summary across all books. Coming soon.
-      </p>
-    </div>
+    <OverviewDashboard
+      accounts={accounts || []}
+      bills={bills || []}
+      subscriptions={subscriptions || []}
+      debts={debts || []}
+      recentTransactions={recentTransactions || []}
+    />
   );
 }

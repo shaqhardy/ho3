@@ -1,10 +1,52 @@
-export default function NonprofitPage() {
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { BookDashboard } from "@/components/book-dashboard";
+
+export default async function NonprofitPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const [
+    { data: accounts },
+    { data: transactions },
+    { data: subscriptions },
+    { data: categories },
+  ] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("*")
+      .eq("book", "nonprofit")
+      .order("name"),
+    supabase
+      .from("transactions")
+      .select("*, categories(name)")
+      .eq("book", "nonprofit")
+      .order("date", { ascending: false })
+      .limit(100),
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("book", "nonprofit")
+      .order("next_charge_date"),
+    supabase
+      .from("categories")
+      .select("*")
+      .eq("book", "nonprofit")
+      .order("name"),
+  ]);
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-foreground">Nonprofit</h1>
-      <p className="mt-2 text-muted">
-        Nonprofit finances dashboard. Coming soon.
-      </p>
-    </div>
+    <BookDashboard
+      book="nonprofit"
+      bookLabel="Nonprofit"
+      accounts={accounts || []}
+      transactions={transactions || []}
+      subscriptions={subscriptions || []}
+      categories={categories || []}
+    />
   );
 }

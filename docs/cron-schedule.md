@@ -2,6 +2,8 @@
 
 The daily notification cron is defined in `vercel.json` and runs via Vercel Cron.
 
+> Note: Vercel's `vercel.json` schema does not permit comments or unknown top-level fields, so this file is the canonical source of documentation for the cron schedule.
+
 ## Current schedule
 
 `0 12 * * *` — daily at 12:00 UTC.

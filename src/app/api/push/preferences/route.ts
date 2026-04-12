@@ -1,18 +1,76 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
-interface PreferencesBody {
-  bills_due?: boolean;
-  shortfall_warning?: boolean;
-  plaid_sync_errors?: boolean;
-  daily_summary?: boolean;
-}
+type BoolKey =
+  | "bills_due"
+  | "shortfall_warning"
+  | "plaid_sync_errors"
+  | "daily_summary"
+  | "large_transactions"
+  | "income_alerts"
+  | "low_balance_warning"
+  | "bill_paid_confirmation"
+  | "bill_not_paid_alert"
+  | "subscription_renewal_warning"
+  | "debt_milestone_paid_off"
+  | "debt_milestone_halfway"
+  | "debt_milestone_custom"
+  | "plaid_reconnect_needed"
+  | "category_overspend"
+  | "goal_hit";
 
-const DEFAULTS = {
+type NumKey =
+  | "large_txn_threshold_personal"
+  | "large_txn_threshold_business"
+  | "large_txn_threshold_nonprofit";
+
+const BOOL_KEYS: BoolKey[] = [
+  "bills_due",
+  "shortfall_warning",
+  "plaid_sync_errors",
+  "daily_summary",
+  "large_transactions",
+  "income_alerts",
+  "low_balance_warning",
+  "bill_paid_confirmation",
+  "bill_not_paid_alert",
+  "subscription_renewal_warning",
+  "debt_milestone_paid_off",
+  "debt_milestone_halfway",
+  "debt_milestone_custom",
+  "plaid_reconnect_needed",
+  "category_overspend",
+  "goal_hit",
+];
+
+const NUM_KEYS: NumKey[] = [
+  "large_txn_threshold_personal",
+  "large_txn_threshold_business",
+  "large_txn_threshold_nonprofit",
+];
+
+const SELECT_COLS = [...BOOL_KEYS, ...NUM_KEYS, "user_id"].join(", ");
+
+const DEFAULTS: Record<BoolKey, boolean> & Record<NumKey, number> = {
   bills_due: true,
   shortfall_warning: true,
   plaid_sync_errors: true,
   daily_summary: true,
+  large_transactions: false,
+  income_alerts: true,
+  low_balance_warning: true,
+  bill_paid_confirmation: true,
+  bill_not_paid_alert: true,
+  subscription_renewal_warning: true,
+  debt_milestone_paid_off: true,
+  debt_milestone_halfway: true,
+  debt_milestone_custom: true,
+  plaid_reconnect_needed: true,
+  category_overspend: false,
+  goal_hit: false,
+  large_txn_threshold_personal: 100,
+  large_txn_threshold_business: 250,
+  large_txn_threshold_nonprofit: 250,
 };
 
 export async function GET() {
@@ -27,9 +85,7 @@ export async function GET() {
   const admin = await createServiceClient();
   const { data: existing } = await admin
     .from("notification_preferences")
-    .select(
-      "user_id, bills_due, shortfall_warning, plaid_sync_errors, daily_summary"
-    )
+    .select(SELECT_COLS)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -37,7 +93,7 @@ export async function GET() {
     return NextResponse.json({ preferences: existing });
   }
 
-  // Create defaults.
+  // Create defaults row.
   const row = { user_id: user.id, ...DEFAULTS };
   const { error } = await admin.from("notification_preferences").insert(row);
   if (error) {
@@ -55,21 +111,26 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: PreferencesBody;
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as PreferencesBody;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const update: PreferencesBody = {};
-  if (typeof body.bills_due === "boolean") update.bills_due = body.bills_due;
-  if (typeof body.shortfall_warning === "boolean")
-    update.shortfall_warning = body.shortfall_warning;
-  if (typeof body.plaid_sync_errors === "boolean")
-    update.plaid_sync_errors = body.plaid_sync_errors;
-  if (typeof body.daily_summary === "boolean")
-    update.daily_summary = body.daily_summary;
+  const update: Record<string, boolean | number> = {};
+  for (const k of BOOL_KEYS) {
+    if (typeof body[k] === "boolean") update[k] = body[k] as boolean;
+  }
+  for (const k of NUM_KEYS) {
+    const v = body[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+      update[k] = v;
+    } else if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) update[k] = n;
+    }
+  }
 
   const admin = await createServiceClient();
 
@@ -80,9 +141,7 @@ export async function PUT(request: NextRequest) {
       { user_id: user.id, ...DEFAULTS, ...update },
       { onConflict: "user_id" }
     )
-    .select(
-      "user_id, bills_due, shortfall_warning, plaid_sync_errors, daily_summary"
-    )
+    .select(SELECT_COLS)
     .single();
 
   if (error) {

@@ -2,15 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { Card, ElevatedCard } from "@/components/ui/card";
-import { Bell, BellOff, Smartphone, Trash2, Check, Shield, ArrowRight } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Smartphone,
+  Trash2,
+  Check,
+  Shield,
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import Link from "next/link";
+
+type Book = "personal" | "business" | "nonprofit";
 
 interface Profile {
   id: string;
   email: string;
   full_name: string;
   role: "admin" | "user";
-  allowed_books: string[];
+  allowed_books: Book[];
 }
 
 interface Preferences {
@@ -18,6 +30,21 @@ interface Preferences {
   shortfall_warning: boolean;
   plaid_sync_errors: boolean;
   daily_summary: boolean;
+  large_transactions: boolean;
+  large_txn_threshold_personal: number;
+  large_txn_threshold_business: number;
+  large_txn_threshold_nonprofit: number;
+  income_alerts: boolean;
+  low_balance_warning: boolean;
+  bill_paid_confirmation: boolean;
+  bill_not_paid_alert: boolean;
+  subscription_renewal_warning: boolean;
+  debt_milestone_paid_off: boolean;
+  debt_milestone_halfway: boolean;
+  debt_milestone_custom: boolean;
+  plaid_reconnect_needed: boolean;
+  category_overspend: boolean;
+  goal_hit: boolean;
 }
 
 interface Subscription {
@@ -28,6 +55,46 @@ interface Subscription {
   created_at: string;
   last_used_at: string;
 }
+
+interface AccountRow {
+  id: string;
+  name: string;
+  book: Book;
+  current_balance: number | string;
+  low_balance_threshold: number | string | null;
+}
+
+interface DebtRow {
+  id: string;
+  creditor: string;
+  nickname: string | null;
+  current_balance: number | string;
+  original_balance: number | string | null;
+  custom_milestone_threshold: number | string | null;
+  book: Book;
+}
+
+const DEFAULT_PREFS: Preferences = {
+  bills_due: true,
+  shortfall_warning: true,
+  plaid_sync_errors: true,
+  daily_summary: true,
+  large_transactions: false,
+  large_txn_threshold_personal: 100,
+  large_txn_threshold_business: 250,
+  large_txn_threshold_nonprofit: 250,
+  income_alerts: true,
+  low_balance_warning: true,
+  bill_paid_confirmation: true,
+  bill_not_paid_alert: true,
+  subscription_renewal_warning: true,
+  debt_milestone_paid_off: true,
+  debt_milestone_halfway: true,
+  debt_milestone_custom: true,
+  plaid_reconnect_needed: true,
+  category_overspend: false,
+  goal_hit: false,
+};
 
 function urlBase64ToUint8Array(base64String: string): BufferSource {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -41,27 +108,47 @@ function urlBase64ToUint8Array(base64String: string): BufferSource {
   return buffer;
 }
 
+function normalizePrefs(p: Partial<Preferences> | null | undefined): Preferences {
+  const out = { ...DEFAULT_PREFS } as Preferences;
+  if (!p) return out;
+  for (const k of Object.keys(DEFAULT_PREFS) as (keyof Preferences)[]) {
+    const v = p[k];
+    if (v !== undefined && v !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (out as any)[k] = v;
+    }
+  }
+  return out;
+}
+
 export function SettingsView({
   profile,
   preferences: initialPreferences,
   subscriptions: initialSubscriptions,
+  accounts: initialAccounts,
+  debts: initialDebts,
+  hasBudgets,
+  hasGoals,
 }: {
   profile: Profile | null;
-  preferences: Preferences | null;
+  preferences: Partial<Preferences> | null;
   subscriptions: Subscription[];
+  accounts: AccountRow[];
+  debts: DebtRow[];
+  hasBudgets: boolean;
+  hasGoals: boolean;
 }) {
   const [prefs, setPrefs] = useState<Preferences>(
-    initialPreferences || {
-      bills_due: true,
-      shortfall_warning: true,
-      plaid_sync_errors: true,
-      daily_summary: true,
-    }
+    normalizePrefs(initialPreferences)
   );
   const [subscriptions, setSubscriptions] =
     useState<Subscription[]>(initialSubscriptions);
+  const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts);
+  const [debts, setDebts] = useState<DebtRow[]>(initialDebts);
   const [pushSupported, setPushSupported] = useState(false);
-  const [backupCodesRemaining, setBackupCodesRemaining] = useState<number | null>(null);
+  const [backupCodesRemaining, setBackupCodesRemaining] = useState<number | null>(
+    null
+  );
   const [regenerating, setRegenerating] = useState(false);
   const [newCodes, setNewCodes] = useState<string[] | null>(null);
   const [permissionState, setPermissionState] =
@@ -69,6 +156,7 @@ export function SettingsView({
   const [isSubscribedHere, setIsSubscribedHere] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -157,7 +245,6 @@ export function SettingsView({
 
       if (res.ok) {
         setIsSubscribedHere(true);
-        // Refresh subscription list
         window.location.reload();
       }
     } catch (err) {
@@ -188,13 +275,41 @@ export function SettingsView({
     setLoading(false);
   }
 
-  async function updatePref(key: keyof Preferences, value: boolean) {
-    const next = { ...prefs, [key]: value };
-    setPrefs(next);
+  async function updatePref<K extends keyof Preferences>(
+    key: K,
+    value: Preferences[K]
+  ) {
+    setPrefs((p) => ({ ...p, [key]: value }));
     await fetch("/api/push/preferences", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [key]: value }),
+    });
+  }
+
+  async function updateAccountThreshold(id: string, value: number | null) {
+    setAccounts((rows) =>
+      rows.map((r) =>
+        r.id === id ? { ...r, low_balance_threshold: value } : r
+      )
+    );
+    await fetch(`/api/accounts/${id}/threshold`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ low_balance_threshold: value }),
+    });
+  }
+
+  async function updateDebtMilestone(id: string, value: number | null) {
+    setDebts((rows) =>
+      rows.map((r) =>
+        r.id === id ? { ...r, custom_milestone_threshold: value } : r
+      )
+    );
+    await fetch(`/api/debts/${id}/milestones`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_milestone_threshold: value }),
     });
   }
 
@@ -415,13 +530,12 @@ export function SettingsView({
                 </div>
               )}
 
-              {pushSupported &&
-                permissionState === "denied" && (
-                  <p className="mt-2 text-sm text-deficit">
-                    Notifications are blocked. Enable them in your browser
-                    settings to continue.
-                  </p>
-                )}
+              {pushSupported && permissionState === "denied" && (
+                <p className="mt-2 text-sm text-deficit">
+                  Notifications are blocked. Enable them in your browser
+                  settings to continue.
+                </p>
+              )}
 
               {pushSupported &&
                 permissionState !== "denied" &&
@@ -472,39 +586,291 @@ export function SettingsView({
 
         {/* Alert type toggles */}
         {isSubscribedHere && (
-          <div className="mt-4">
-            <div className="mb-3">
-              <h3 className="label-sm">Alert types</h3>
-            </div>
-            <Card>
-              <div className="divide-y divide-border-subtle">
-                <ToggleRow
-                  label="Bills due tomorrow"
-                  description="One alert per bill at 7am Pacific"
-                  checked={prefs.bills_due}
-                  onChange={(v) => updatePref("bills_due", v)}
-                />
-                <ToggleRow
-                  label="Shortfall warnings"
-                  description="When your 14-day projection shows a gap"
-                  checked={prefs.shortfall_warning}
-                  onChange={(v) => updatePref("shortfall_warning", v)}
-                />
-                <ToggleRow
-                  label="Plaid sync errors"
-                  description="When a bank connection needs attention"
-                  checked={prefs.plaid_sync_errors}
-                  onChange={(v) => updatePref("plaid_sync_errors", v)}
-                />
-                <ToggleRow
-                  label="Daily summary"
-                  description="Morning recap at 7am Pacific"
-                  checked={prefs.daily_summary}
-                  onChange={(v) => updatePref("daily_summary", v)}
-                />
+          <>
+            {/* Original set */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Scheduled alerts</h3>
               </div>
-            </Card>
-          </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Bills due tomorrow"
+                    description="One alert per bill at 7am Pacific"
+                    checked={prefs.bills_due}
+                    onChange={(v) => updatePref("bills_due", v)}
+                  />
+                  <ToggleRow
+                    label="Shortfall warnings"
+                    description="When your 14-day projection shows a gap"
+                    checked={prefs.shortfall_warning}
+                    onChange={(v) => updatePref("shortfall_warning", v)}
+                  />
+                  <ToggleRow
+                    label="Plaid sync errors"
+                    description="When a bank connection fails to sync"
+                    checked={prefs.plaid_sync_errors}
+                    onChange={(v) => updatePref("plaid_sync_errors", v)}
+                  />
+                  <ToggleRow
+                    label="Daily summary"
+                    description="Morning recap at 7am Pacific"
+                    checked={prefs.daily_summary}
+                    onChange={(v) => updatePref("daily_summary", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Transactions & Balances */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Transactions &amp; balances</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Large transactions"
+                    description="Alert when a charge crosses your threshold per book"
+                    checked={prefs.large_transactions}
+                    onChange={(v) => updatePref("large_transactions", v)}
+                  />
+                  <ToggleRow
+                    label="Income alerts"
+                    description="Celebrate when income hits your account"
+                    checked={prefs.income_alerts}
+                    onChange={(v) => updatePref("income_alerts", v)}
+                  />
+                  <ToggleRow
+                    label="Low balance warning"
+                    description="Alert when an account drops below its threshold"
+                    checked={prefs.low_balance_warning}
+                    onChange={(v) => updatePref("low_balance_warning", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Bills & Subscriptions */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Bills &amp; subscriptions</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Bill paid confirmation"
+                    description="Confirm when a matched transaction pays a bill"
+                    checked={prefs.bill_paid_confirmation}
+                    onChange={(v) => updatePref("bill_paid_confirmation", v)}
+                  />
+                  <ToggleRow
+                    label="BILL NOT PAID alert"
+                    description="Warn if a bill passes its due date without a match"
+                    checked={prefs.bill_not_paid_alert}
+                    onChange={(v) => updatePref("bill_not_paid_alert", v)}
+                  />
+                  <ToggleRow
+                    label="Subscription renewal warning"
+                    description="3-day heads-up before a subscription renews"
+                    checked={prefs.subscription_renewal_warning}
+                    onChange={(v) =>
+                      updatePref("subscription_renewal_warning", v)
+                    }
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Debt Milestones */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Debt milestones</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Paid off"
+                    description="When a debt hits $0"
+                    checked={prefs.debt_milestone_paid_off}
+                    onChange={(v) => updatePref("debt_milestone_paid_off", v)}
+                  />
+                  <ToggleRow
+                    label="Halfway"
+                    description="Half the original balance paid down"
+                    checked={prefs.debt_milestone_halfway}
+                    onChange={(v) => updatePref("debt_milestone_halfway", v)}
+                  />
+                  <ToggleRow
+                    label="Custom milestone"
+                    description="Per-debt threshold (set below in Advanced)"
+                    checked={prefs.debt_milestone_custom}
+                    onChange={(v) => updatePref("debt_milestone_custom", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Plaid */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Plaid</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Reconnect needed"
+                    description="When a bank asks you to sign back in"
+                    checked={prefs.plaid_reconnect_needed}
+                    onChange={(v) => updatePref("plaid_reconnect_needed", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Budgets */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Budgets</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Category overspend"
+                    description={
+                      hasBudgets
+                        ? "When spending exceeds a budget category"
+                        : "Create a budget first"
+                    }
+                    checked={prefs.category_overspend && hasBudgets}
+                    disabled={!hasBudgets}
+                    onChange={(v) => updatePref("category_overspend", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Goals */}
+            <div className="mt-4">
+              <div className="mb-3">
+                <h3 className="label-sm">Goals</h3>
+              </div>
+              <Card>
+                <div className="divide-y divide-border-subtle">
+                  <ToggleRow
+                    label="Goal hit"
+                    description={
+                      hasGoals
+                        ? "When you reach a savings or payoff goal"
+                        : "Create a goal first"
+                    }
+                    checked={prefs.goal_hit && hasGoals}
+                    disabled={!hasGoals}
+                    onChange={(v) => updatePref("goal_hit", v)}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Advanced thresholds */}
+            <div className="mt-4">
+              <button
+                onClick={() => setAdvancedOpen((x) => !x)}
+                className="mb-3 flex w-full items-center gap-2 text-left"
+                aria-expanded={advancedOpen}
+              >
+                {advancedOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted" />
+                )}
+                <span className="label-sm">Advanced thresholds</span>
+              </button>
+
+              {advancedOpen && (
+                <div className="space-y-4">
+                  {/* Per-book large transaction thresholds */}
+                  <Card>
+                    <p className="mb-3 text-sm font-medium text-foreground">
+                      Large transaction threshold
+                    </p>
+                    <p className="mb-3 text-xs text-muted">
+                      Alert when a charge in that book is at or above this
+                      amount.
+                    </p>
+                    <div className="space-y-3">
+                      <ThresholdField
+                        label="Personal"
+                        value={prefs.large_txn_threshold_personal}
+                        onCommit={(n) =>
+                          updatePref("large_txn_threshold_personal", n)
+                        }
+                      />
+                      <ThresholdField
+                        label="Business"
+                        value={prefs.large_txn_threshold_business}
+                        onCommit={(n) =>
+                          updatePref("large_txn_threshold_business", n)
+                        }
+                      />
+                      <ThresholdField
+                        label="Nonprofit"
+                        value={prefs.large_txn_threshold_nonprofit}
+                        onCommit={(n) =>
+                          updatePref("large_txn_threshold_nonprofit", n)
+                        }
+                      />
+                    </div>
+                  </Card>
+
+                  {/* Per-account low balance thresholds */}
+                  {accounts.length > 0 && (
+                    <Card>
+                      <p className="mb-3 text-sm font-medium text-foreground">
+                        Low balance thresholds
+                      </p>
+                      <p className="mb-3 text-xs text-muted">
+                        Default is $200. Adjust per account.
+                      </p>
+                      <div className="divide-y divide-border-subtle">
+                        {accounts.map((acc) => (
+                          <AccountThresholdRow
+                            key={acc.id}
+                            account={acc}
+                            onCommit={(n) =>
+                              updateAccountThreshold(acc.id, n)
+                            }
+                          />
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Per-debt custom milestone thresholds */}
+                  {debts.length > 0 && (
+                    <Card>
+                      <p className="mb-3 text-sm font-medium text-foreground">
+                        Debt custom milestones
+                      </p>
+                      <p className="mb-3 text-xs text-muted">
+                        Fire once when a debt&apos;s balance drops to or below
+                        this amount.
+                      </p>
+                      <div className="divide-y divide-border-subtle">
+                        {debts.map((d) => (
+                          <DebtMilestoneRow
+                            key={d.id}
+                            debt={d}
+                            onCommit={(n) => updateDebtMilestone(d.id, n)}
+                          />
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Device list */}
@@ -553,26 +919,35 @@ function ToggleRow({
   label,
   description,
   checked,
+  disabled = false,
   onChange,
 }: {
   label: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p
+          className={`text-sm font-medium ${
+            disabled ? "text-muted" : "text-foreground"
+          }`}
+        >
+          {label}
+        </p>
         <p className="text-xs text-muted">{description}</p>
       </div>
       <button
-        onClick={() => onChange(!checked)}
+        onClick={() => !disabled && onChange(!checked)}
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
           checked ? "bg-terracotta" : "bg-border"
-        }`}
+        } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
       >
         <span
           className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
@@ -580,6 +955,189 @@ function ToggleRow({
           }`}
         />
       </button>
+    </div>
+  );
+}
+
+function ThresholdField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  onCommit: (n: number) => void;
+}) {
+  const [local, setLocal] = useState(String(value));
+
+  useEffect(() => {
+    setLocal(String(value));
+  }, [value]);
+
+  return (
+    <label className="flex items-center justify-between gap-3">
+      <span className="text-sm text-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-muted">$</span>
+        <input
+          type="number"
+          min={0}
+          step={5}
+          inputMode="decimal"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={() => {
+            const n = Number(local);
+            if (Number.isFinite(n) && n >= 0 && n !== value) onCommit(n);
+            else setLocal(String(value));
+          }}
+          className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-right text-sm text-foreground focus:border-terracotta focus:outline-none"
+        />
+      </div>
+    </label>
+  );
+}
+
+function AccountThresholdRow({
+  account,
+  onCommit,
+}: {
+  account: AccountRow;
+  onCommit: (n: number | null) => void;
+}) {
+  const initial =
+    account.low_balance_threshold === null
+      ? ""
+      : String(Number(account.low_balance_threshold));
+  const [local, setLocal] = useState(initial);
+
+  useEffect(() => {
+    setLocal(
+      account.low_balance_threshold === null
+        ? ""
+        : String(Number(account.low_balance_threshold))
+    );
+  }, [account.low_balance_threshold]);
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{account.name}</p>
+        <p className="text-xs text-muted capitalize">
+          {account.book} · Balance{" "}
+          {Number(account.current_balance).toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          })}
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-muted">$</span>
+        <input
+          type="number"
+          min={0}
+          step={10}
+          inputMode="decimal"
+          placeholder="200"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={() => {
+            if (local.trim() === "") {
+              if (account.low_balance_threshold !== null) onCommit(null);
+              return;
+            }
+            const n = Number(local);
+            if (
+              Number.isFinite(n) &&
+              n >= 0 &&
+              n !== Number(account.low_balance_threshold)
+            ) {
+              onCommit(n);
+            } else {
+              setLocal(
+                account.low_balance_threshold === null
+                  ? ""
+                  : String(Number(account.low_balance_threshold))
+              );
+            }
+          }}
+          className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 text-right text-sm text-foreground focus:border-terracotta focus:outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
+function DebtMilestoneRow({
+  debt,
+  onCommit,
+}: {
+  debt: DebtRow;
+  onCommit: (n: number | null) => void;
+}) {
+  const initial =
+    debt.custom_milestone_threshold === null
+      ? ""
+      : String(Number(debt.custom_milestone_threshold));
+  const [local, setLocal] = useState(initial);
+
+  useEffect(() => {
+    setLocal(
+      debt.custom_milestone_threshold === null
+        ? ""
+        : String(Number(debt.custom_milestone_threshold))
+    );
+  }, [debt.custom_milestone_threshold]);
+
+  const name = debt.nickname || debt.creditor;
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-foreground">{name}</p>
+        <p className="text-xs text-muted">
+          Current{" "}
+          {Number(debt.current_balance).toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          })}
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-muted">$</span>
+        <input
+          type="number"
+          min={0}
+          step={50}
+          inputMode="decimal"
+          placeholder="—"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={() => {
+            if (local.trim() === "") {
+              if (debt.custom_milestone_threshold !== null) onCommit(null);
+              return;
+            }
+            const n = Number(local);
+            if (
+              Number.isFinite(n) &&
+              n >= 0 &&
+              n !== Number(debt.custom_milestone_threshold)
+            ) {
+              onCommit(n);
+            } else {
+              setLocal(
+                debt.custom_milestone_threshold === null
+                  ? ""
+                  : String(Number(debt.custom_milestone_threshold))
+              );
+            }
+          }}
+          className="w-28 rounded-lg border border-border bg-background px-3 py-1.5 text-right text-sm text-foreground focus:border-terracotta focus:outline-none"
+        />
+      </div>
     </div>
   );
 }
@@ -594,5 +1152,5 @@ function shortDevice(ua: string | null): string {
   return ua.slice(0, 40) + (ua.length > 40 ? "…" : "");
 }
 
-// BellOff for when we want to silence — not used currently but imported to avoid tree-shaking pressure.
+// Prevent tree-shake pressure on import.
 void BellOff;

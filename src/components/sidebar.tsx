@@ -149,6 +149,34 @@ export function Sidebar({ profile }: { profile: Profile }) {
           })}
         </nav>
 
+        {/* Sub-nav for personal */}
+        {profile.allowed_books.includes("personal") && (
+          <div className="px-3 pb-2 space-y-0.5">
+            <Link
+              href="/personal/budgets"
+              onClick={() => setOpen(false)}
+              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                pathname.startsWith("/personal/budgets")
+                  ? "bg-terracotta/10 text-terracotta"
+                  : "text-muted hover:bg-card-hover hover:text-foreground"
+              }`}
+            >
+              <span className="ml-8">Budgets</span>
+            </Link>
+            <Link
+              href="/personal/goals"
+              onClick={() => setOpen(false)}
+              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                pathname.startsWith("/personal/goals")
+                  ? "bg-terracotta/10 text-terracotta"
+                  : "text-muted hover:bg-card-hover hover:text-foreground"
+              }`}
+            >
+              <span className="ml-8">Goals</span>
+            </Link>
+          </div>
+        )}
+
         {/* Settings link */}
         <div className="px-3 pb-2">
           <Link

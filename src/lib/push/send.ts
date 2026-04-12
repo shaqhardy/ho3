@@ -14,7 +14,17 @@ export type AlertType =
   | "shortfall_warning"
   | "plaid_sync_errors"
   | "daily_summary"
-  | "test";
+  | "test"
+  | "large_txn"
+  | "income"
+  | "low_balance"
+  | "bill_paid"
+  | "bill_not_paid"
+  | "subscription_renewal"
+  | "debt_milestone"
+  | "plaid_reconnect"
+  | "category_overspend"
+  | "goal_hit";
 
 let vapidConfigured = false;
 function ensureVapid() {

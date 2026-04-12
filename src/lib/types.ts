@@ -1,6 +1,6 @@
 export type Book = "personal" | "business" | "nonprofit";
 
-export type PriorityTier = 1 | 2 | 3;
+export type PriorityTier = "1" | "2" | "3";
 
 export type PayoffStrategy = "avalanche" | "snowball";
 

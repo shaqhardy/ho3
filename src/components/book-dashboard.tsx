@@ -9,7 +9,8 @@ import { useRouter } from "next/navigation";
 import type { Account, Transaction, Subscription, Category, Book } from "@/lib/types";
 import { AccountsList } from "@/components/personal/accounts-list";
 import { EmptyState } from "@/components/empty-state";
-import { Plus, RotateCw, Pause } from "lucide-react";
+import { Plus, RotateCw, Pause, Beaker } from "lucide-react";
+import Link from "next/link";
 
 interface Props {
   book: Book;
@@ -146,6 +147,33 @@ export function BookDashboard({
           {bookLabel}
         </h1>
       </header>
+
+      <section>
+        <div className="mb-3">
+          <h2 className="label-sm">Quick Actions</h2>
+        </div>
+        <Link href={`/${book}/whatif`} className="group block">
+          <Card
+            interactive
+            accent="terracotta"
+            className="flex items-center gap-4"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-terracotta/15">
+              <Beaker className="h-5 w-5 text-terracotta" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">What If</p>
+              <p className="text-xs text-muted">
+                Try hypothetical expenses &amp; income without changing your
+                books.
+              </p>
+            </div>
+            <p className="hidden sm:block text-xs font-medium text-terracotta">
+              Run scenarios &rarr;
+            </p>
+          </Card>
+        </Link>
+      </section>
 
       <Tabs tabs={tabs} defaultTab="overview">
         {(tab) => (

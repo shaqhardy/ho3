@@ -19,6 +19,7 @@ import type {
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { EmptyState } from "@/components/empty-state";
 import Link from "next/link";
+import { Beaker } from "lucide-react";
 
 interface Props {
   accounts: Account[];
@@ -201,7 +202,7 @@ export function PersonalDashboard({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="label-sm">Quick Actions</h2>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Link href="/personal/debts" className="group">
             <Card
               interactive
@@ -247,6 +248,23 @@ export function PersonalDashboard({
                 </p>
               </div>
               <div className="h-8 w-8 rounded-lg bg-surplus/15" />
+            </Card>
+          </Link>
+          <Link href="/personal/whatif" className="group">
+            <Card
+              interactive
+              accent="terracotta"
+              className="flex items-center justify-between"
+            >
+              <div>
+                <p className="label-sm">What If</p>
+                <p className="mt-1 text-sm font-semibold text-terracotta">
+                  Run scenarios &rarr;
+                </p>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-terracotta/15">
+                <Beaker className="h-4 w-4 text-terracotta" />
+              </div>
             </Card>
           </Link>
         </div>

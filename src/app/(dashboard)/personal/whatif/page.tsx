@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { PlanView } from "@/components/personal/plan-view";
-import type { Scenario } from "@/lib/projection/engine";
+import { WhatIfView } from "@/components/whatif-view";
 
-export default async function PlanPage() {
+export default async function PersonalWhatIfPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,14 +18,13 @@ export default async function PlanPage() {
     { data: subscriptions },
     { data: debts },
     { data: projectedIncome },
-    { data: planOverrides },
-    scenariosRes,
+    { data: categories },
   ] = await Promise.all([
     supabase
       .from("accounts")
       .select("*")
       .eq("book", "personal")
-      .eq("type", "depository"),
+      .order("name"),
     supabase
       .from("bills")
       .select("*")
@@ -46,23 +44,28 @@ export default async function PlanPage() {
       .eq("book", "personal")
       .gte("date", today)
       .order("date"),
-    supabase.from("plan_overrides").select("*").eq("user_id", user.id),
-    // Scenarios table may or may not exist yet — tolerate errors gracefully.
-    supabase.from("scenarios").select("*").eq("book", "personal"),
+    supabase
+      .from("categories")
+      .select("*")
+      .eq("book", "personal")
+      .order("name"),
   ]);
 
-  const scenarios = (scenariosRes?.data ?? []) as Scenario[];
+  const currentCash = (accounts || [])
+    .filter((a) => a.type === "depository")
+    .reduce((sum, a) => sum + Number(a.current_balance), 0);
 
   return (
-    <PlanView
-      accounts={accounts || []}
+    <WhatIfView
+      book="personal"
+      bookLabel="Personal"
+      currentCash={currentCash}
       bills={bills || []}
       subscriptions={subscriptions || []}
       debts={debts || []}
       projectedIncome={projectedIncome || []}
-      planOverrides={planOverrides || []}
-      userId={user.id}
-      scenarios={scenarios}
+      categories={categories || []}
+      accounts={accounts || []}
     />
   );
 }

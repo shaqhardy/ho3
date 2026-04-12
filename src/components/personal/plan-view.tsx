@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, StatCard } from "@/components/ui/card";
 import { formatCurrency, formatShortDate, daysUntil } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
@@ -14,26 +14,13 @@ import type {
   PlanOverride,
   PriorityTier,
 } from "@/lib/types";
+import {
+  computeProjection,
+  type ProjectionItem,
+  type Scenario,
+} from "@/lib/projection/engine";
+import { WhatIfBadge, WhatIfPanel } from "@/components/whatif-view";
 import { AlertTriangle, CheckCircle, ArrowDown, ArrowUp } from "lucide-react";
-
-interface PlanItem {
-  id: string;
-  type: "bill" | "subscription" | "debt";
-  name: string;
-  amount: number;
-  dueDate: string;
-  tier: PriorityTier;
-  originalTier: PriorityTier;
-  overrideId?: string;
-}
-
-interface TimelineEntry {
-  date: string;
-  items: PlanItem[];
-  income: ProjectedIncome[];
-  balanceAfter: number;
-  shortfall: boolean;
-}
 
 interface Props {
   accounts: Account[];
@@ -43,7 +30,10 @@ interface Props {
   projectedIncome: ProjectedIncome[];
   planOverrides: PlanOverride[];
   userId: string;
+  scenarios?: Scenario[];
 }
+
+const STORAGE_KEY = "ho3-plan-include-whatif";
 
 export function PlanView({
   accounts,
@@ -53,6 +43,7 @@ export function PlanView({
   projectedIncome,
   planOverrides,
   userId,
+  scenarios: initialScenarios,
 }: Props) {
   const router = useRouter();
   const [localOverrides, setLocalOverrides] = useState<
@@ -66,159 +57,173 @@ export function PlanView({
     return map;
   });
 
+  // --- What If toggle (persisted in localStorage) ---
+  // Read initial toggle lazily from localStorage so we don't cause a cascading
+  // render when the effect mirrors state back in.
+  const [includeWhatIf, setIncludeWhatIf] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const [fetchedScenarios, setFetchedScenarios] = useState<Scenario[] | null>(
+    null
+  );
+  const scenarios = useMemo<Scenario[]>(
+    () => initialScenarios ?? fetchedScenarios ?? [],
+    [initialScenarios, fetchedScenarios]
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, includeWhatIf ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [includeWhatIf]);
+
+  // Fetch scenarios on demand when toggle flips on (if not provided by page)
+  useEffect(() => {
+    if (initialScenarios) return;
+    if (!includeWhatIf) return;
+    if (fetchedScenarios !== null) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/scenarios?book=personal", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { scenarios?: Scenario[] };
+        if (!aborted) {
+          setFetchedScenarios(json.scenarios ?? []);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [includeWhatIf, fetchedScenarios, initialScenarios]);
+
   const currentCash = accounts.reduce(
     (sum, a) => sum + Number(a.available_balance ?? a.current_balance),
     0
   );
 
-  // Build plan items with tiers
-  const planItems = useMemo(() => {
-    const items: PlanItem[] = [];
+  // Project via engine — with or without scenarios
+  const projection = useMemo(
+    () =>
+      computeProjection({
+        currentCash,
+        bills,
+        subscriptions,
+        debts,
+        projectedIncome,
+        scenarios: includeWhatIf ? scenarios : [],
+        priorityOverrides: localOverrides,
+        daysAhead: 30,
+      }),
+    [
+      currentCash,
+      bills,
+      subscriptions,
+      debts,
+      projectedIncome,
+      includeWhatIf,
+      scenarios,
+      localOverrides,
+    ]
+  );
 
-    // Bills
-    for (const bill of bills) {
-      const override = localOverrides.get(bill.id);
-      items.push({
-        id: bill.id,
-        type: "bill",
-        name: bill.name,
-        amount: Number(bill.amount),
-        dueDate: bill.due_date,
-        tier: override || bill.priority_tier,
-        originalTier: bill.priority_tier,
-        overrideId: planOverrides.find((o) => o.bill_id === bill.id)?.id,
-      });
-    }
+  const firstShortfall = projection.firstShortfall;
+  const endBalance = projection.endBalance;
 
-    // Subscriptions — default to Tier 3 unless overridden
-    for (const sub of subscriptions) {
-      const override = localOverrides.get(sub.id);
-      items.push({
-        id: sub.id,
-        type: "subscription",
-        name: sub.name,
-        amount: Number(sub.amount),
-        dueDate: sub.next_charge_date,
-        tier: override || "3",
-        originalTier: "3",
-        overrideId: planOverrides.find((o) => o.subscription_id === sub.id)?.id,
-      });
-    }
+  // Derive obligations, income, tier3Items, recommendations from the single
+  // `projection` source — one memo prevents cascading recomputation and keeps
+  // stable references for dependent hooks.
+  const derived = useMemo(() => {
+    let totalObligations = 0;
+    let totalIncoming = 0;
+    const tier3Items: ProjectionItem[] = [];
+    const tier2Items: ProjectionItem[] = [];
 
-    // Debt minimums — default to Tier 2
-    for (const debt of debts) {
-      const override = localOverrides.get(debt.id);
-      items.push({
-        id: debt.id,
-        type: "debt",
-        name: `${debt.creditor} minimum`,
-        amount: Number(debt.minimum_payment),
-        dueDate: debt.statement_due_date,
-        tier: override || "2",
-        originalTier: "2",
-        overrideId: planOverrides.find((o) => o.debt_id === debt.id)?.id,
-      });
-    }
-
-    return items;
-  }, [bills, subscriptions, debts, localOverrides, planOverrides]);
-
-  // Build timeline: walk day by day for next 30 days
-  const timeline = useMemo(() => {
-    const entries: TimelineEntry[] = [];
-    let runningBalance = currentCash;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i <= 30; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() + i);
-      const dateStr = date.toISOString().split("T")[0];
-
-      const dayItems = planItems
-        .filter((item) => item.dueDate === dateStr)
-        .sort((a, b) => a.tier.localeCompare(b.tier));
-
-      const dayIncome = projectedIncome.filter((inc) => inc.date === dateStr);
-
-      // Add income
-      for (const inc of dayIncome) {
-        runningBalance += Number(inc.amount);
-      }
-
-      // Subtract expenses (tier order)
-      for (const item of dayItems) {
-        runningBalance -= item.amount;
-      }
-
-      if (dayItems.length > 0 || dayIncome.length > 0) {
-        entries.push({
-          date: dateStr,
-          items: dayItems,
-          income: dayIncome,
-          balanceAfter: runningBalance,
-          shortfall: runningBalance < 0,
-        });
+    for (const item of projection.items) {
+      if (item.isIncome) {
+        totalIncoming += item.amount;
+      } else {
+        totalObligations += item.amount;
+        if (item.tier === "3") tier3Items.push(item);
+        else if (item.tier === "2") tier2Items.push(item);
       }
     }
 
-    return entries;
-  }, [planItems, projectedIncome, currentCash]);
+    const tier3Total = tier3Items.reduce((sum, i) => sum + i.amount, 0);
+    const shortfallAmount = projection.firstShortfall
+      ? Math.abs(projection.firstShortfall.balanceAfter)
+      : 0;
 
-  const shortfalls = timeline.filter((e) => e.shortfall);
-  const firstShortfall = shortfalls[0];
-
-  // Recommendations: which Tier 3 to cut
-  const tier3Items = planItems.filter((i) => i.tier === "3");
-  const tier3Total = tier3Items.reduce((sum, i) => i.amount + sum, 0);
-  const shortfallAmount = firstShortfall
-    ? Math.abs(firstShortfall.balanceAfter)
-    : 0;
-
-  const recommendations = useMemo(() => {
-    if (!firstShortfall) return [];
-
-    const recs: string[] = [];
-    let recovered = 0;
-
-    // Recommend cutting Tier 3 items
-    const sorted = [...tier3Items].sort((a, b) => b.amount - a.amount);
-    for (const item of sorted) {
-      if (recovered >= shortfallAmount) break;
-      recs.push(`Cut ${item.name} (${formatCurrency(item.amount)})`);
-      recovered += item.amount;
-    }
-
-    // If still short, recommend calling Tier 2
-    if (recovered < shortfallAmount) {
-      const tier2 = planItems
-        .filter((i) => i.tier === "2")
-        .sort((a, b) => b.amount - a.amount);
-      for (const item of tier2) {
+    const recommendations: string[] = [];
+    if (projection.firstShortfall) {
+      let recovered = 0;
+      const sorted = tier3Items.toSorted((a, b) => b.amount - a.amount);
+      for (const item of sorted) {
         if (recovered >= shortfallAmount) break;
-        recs.push(
-          `Call ${item.name} and push payment (${formatCurrency(item.amount)})`
+        recommendations.push(
+          `Cut ${item.name} (${formatCurrency(item.amount)})`
         );
         recovered += item.amount;
       }
+      if (recovered < shortfallAmount) {
+        const tier2Sorted = tier2Items.toSorted(
+          (a, b) => b.amount - a.amount
+        );
+        for (const item of tier2Sorted) {
+          if (recovered >= shortfallAmount) break;
+          recommendations.push(
+            `Call ${item.name} and push payment (${formatCurrency(item.amount)})`
+          );
+          recovered += item.amount;
+        }
+      }
     }
 
-    return recs;
-  }, [firstShortfall, tier3Items, shortfallAmount, planItems]);
+    return {
+      totalObligations,
+      totalIncoming,
+      tier3Total,
+      recommendations,
+    };
+  }, [projection]);
 
-  async function overrideTier(itemId: string, itemType: string, newTier: PriorityTier) {
+  const {
+    totalObligations,
+    totalIncoming,
+    tier3Total,
+    recommendations,
+  } = derived;
+
+  async function overrideTier(
+    sourceId: string,
+    itemType: ProjectionItem["type"],
+    newTier: PriorityTier
+  ) {
     setLocalOverrides((prev) => {
       const next = new Map(prev);
-      next.set(itemId, newTier);
+      next.set(sourceId, newTier);
       return next;
     });
 
     const supabase = createClient();
     const existing = planOverrides.find(
       (o) =>
-        o.bill_id === itemId ||
-        o.subscription_id === itemId ||
-        o.debt_id === itemId
+        o.bill_id === sourceId ||
+        o.subscription_id === sourceId ||
+        o.debt_id === sourceId
     );
 
     if (existing) {
@@ -231,9 +236,9 @@ export function PlanView({
         user_id: userId,
         override_tier: newTier,
       };
-      if (itemType === "bill") insert.bill_id = itemId;
-      else if (itemType === "subscription") insert.subscription_id = itemId;
-      else if (itemType === "debt") insert.debt_id = itemId;
+      if (itemType === "bill") insert.bill_id = sourceId;
+      else if (itemType === "subscription") insert.subscription_id = sourceId;
+      else if (itemType === "debt") insert.debt_id = sourceId;
 
       await supabase.from("plan_overrides").insert(insert);
     }
@@ -241,19 +246,25 @@ export function PlanView({
     router.refresh();
   }
 
-  const totalObligations = planItems.reduce((sum, i) => sum + i.amount, 0);
-  const totalIncoming = projectedIncome.reduce(
-    (sum, i) => sum + Number(i.amount),
-    0
-  );
-  const endBalance = currentCash + totalIncoming - totalObligations;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">The Plan</h1>
         <p className="text-xs text-muted">Next 30 days</p>
       </div>
+
+      {/* What If toggle */}
+      <WhatIfPanel
+        book="personal"
+        currentCash={currentCash}
+        bills={bills}
+        subscriptions={subscriptions}
+        debts={debts}
+        projectedIncome={projectedIncome}
+        scenarios={initialScenarios ?? scenarios}
+        include={includeWhatIf}
+        onIncludeChange={setIncludeWhatIf}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -328,10 +339,12 @@ export function PlanView({
           Day-by-Day
         </h2>
         <div className="space-y-2">
-          {timeline.map((entry) => (
+          {projection.timeline.map((entry) => (
             <Card
               key={entry.date}
-              className={`py-3 px-4 ${entry.shortfall ? "border-deficit/30" : ""}`}
+              className={`py-3 px-4 ${
+                entry.shortfall ? "border-deficit/30" : ""
+              }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-muted">
@@ -341,7 +354,9 @@ export function PlanView({
                   )}
                 </p>
                 <p
-                  className={`text-sm font-bold ${entry.shortfall ? "text-deficit" : "text-foreground"}`}
+                  className={`text-sm font-bold ${
+                    entry.shortfall ? "text-deficit" : "text-foreground"
+                  }`}
                 >
                   {formatCurrency(entry.balanceAfter)}
                 </p>
@@ -353,61 +368,84 @@ export function PlanView({
                   key={inc.id}
                   className="flex items-center justify-between py-1 text-sm"
                 >
-                  <div className="flex items-center gap-2">
-                    <ArrowDown className="h-3.5 w-3.5 text-surplus" />
-                    <span className="text-foreground">{inc.source}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ArrowDown className="h-3.5 w-3.5 text-surplus shrink-0" />
                     <span
-                      className={`text-[10px] px-1 rounded ${
-                        inc.confidence === "confirmed"
-                          ? "bg-surplus/10 text-surplus"
-                          : inc.confidence === "expected"
-                            ? "bg-warning/10 text-warning"
-                            : "bg-card-hover text-muted"
+                      className={`truncate ${
+                        inc.isHypothetical
+                          ? "italic text-foreground"
+                          : "text-foreground"
                       }`}
                     >
-                      {inc.confidence}
+                      {inc.name}
                     </span>
+                    {inc.isHypothetical && <WhatIfBadge />}
+                    {inc.confidence && (
+                      <span
+                        className={`text-[10px] px-1 rounded ${
+                          inc.confidence === "confirmed"
+                            ? "bg-surplus/10 text-surplus"
+                            : inc.confidence === "expected"
+                              ? "bg-warning/10 text-warning"
+                              : "bg-card-hover text-muted"
+                        }`}
+                      >
+                        {inc.confidence}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-surplus font-medium">
-                    +{formatCurrency(Number(inc.amount))}
+                  <span className="text-surplus font-medium shrink-0">
+                    +{formatCurrency(inc.amount)}
                   </span>
                 </div>
               ))}
 
               {/* Expenses */}
-              {entry.items.map((item) => (
+              {entry.expenses.map((item) => (
                 <div
-                  key={`${item.type}-${item.id}`}
+                  key={item.id}
                   className="flex items-center justify-between py-1 text-sm"
                 >
-                  <div className="flex items-center gap-2">
-                    <ArrowUp className="h-3.5 w-3.5 text-deficit" />
-                    <span className="text-foreground">{item.name}</span>
-                    <button
-                      onClick={() => {
-                        const tiers: PriorityTier[] = ["1", "2", "3"];
-                        const currentIdx = tiers.indexOf(item.tier);
-                        const nextTier = tiers[(currentIdx + 1) % 3];
-                        overrideTier(item.id, item.type, nextTier);
-                      }}
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${
-                        item.tier === "1"
-                          ? "bg-deficit/10 text-deficit"
-                          : item.tier === "2"
-                            ? "bg-warning/10 text-warning"
-                            : "bg-card-hover text-muted"
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ArrowUp className="h-3.5 w-3.5 text-deficit shrink-0" />
+                    <span
+                      className={`truncate ${
+                        item.isHypothetical
+                          ? "italic text-foreground"
+                          : "text-foreground"
                       }`}
-                      title="Click to change priority tier"
                     >
-                      T{item.tier}
-                    </button>
-                    {item.tier !== item.originalTier && (
-                      <span className="text-[10px] text-terracotta">
-                        (overridden)
-                      </span>
+                      {item.name}
+                    </span>
+                    {item.isHypothetical && <WhatIfBadge />}
+                    {!item.isHypothetical && (
+                      <button
+                        onClick={() => {
+                          const tiers: PriorityTier[] = ["1", "2", "3"];
+                          const currentIdx = tiers.indexOf(item.tier);
+                          const nextTier = tiers[(currentIdx + 1) % 3];
+                          overrideTier(item.sourceId, item.type, nextTier);
+                        }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium cursor-pointer ${
+                          item.tier === "1"
+                            ? "bg-deficit/10 text-deficit"
+                            : item.tier === "2"
+                              ? "bg-warning/10 text-warning"
+                              : "bg-card-hover text-muted"
+                        }`}
+                        title="Click to change priority tier"
+                      >
+                        T{item.tier}
+                      </button>
                     )}
+                    {!item.isHypothetical &&
+                      item.tier !== item.originalTier && (
+                        <span className="text-[10px] text-terracotta">
+                          (overridden)
+                        </span>
+                      )}
                   </div>
-                  <span className="text-foreground font-medium">
+                  <span className="text-foreground font-medium shrink-0">
                     -{formatCurrency(item.amount)}
                   </span>
                 </div>
@@ -415,11 +453,11 @@ export function PlanView({
             </Card>
           ))}
 
-          {timeline.length === 0 && (
+          {projection.timeline.length === 0 && (
             <Card className="text-center py-12">
               <p className="text-muted">
-                No bills, subscriptions, or income in the next 30 days.
-                Add some to see your plan.
+                No bills, subscriptions, or income in the next 30 days. Add some
+                to see your plan.
               </p>
             </Card>
           )}

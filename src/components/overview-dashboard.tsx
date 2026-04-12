@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Calendar,
   RotateCw,
+  Beaker,
 } from "lucide-react";
 import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
 
@@ -246,6 +247,31 @@ export function OverviewDashboard({
       </header>
 
       {sparseBanner}
+
+      {/* What If quick-link (cross-book) */}
+      <section>
+        <Link href="/overview/whatif" className="group block">
+          <Card
+            interactive
+            accent="terracotta"
+            className="flex items-center gap-4"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-terracotta/15">
+              <Beaker className="h-5 w-5 text-terracotta" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">
+                Cross-book What If
+              </p>
+              <p className="text-xs text-muted">
+                Model hypothetical moves across Personal, Business, and
+                Nonprofit in one view.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </Card>
+        </Link>
+      </section>
 
       {/* Hero net worth */}
       <ElevatedCard>

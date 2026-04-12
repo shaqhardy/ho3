@@ -13,20 +13,16 @@ export default async function DashboardLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    console.log("[dashboard-layout] REDIRECT: no user from getUser()");
     redirect("/login");
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
 
   if (!profile) {
-    console.log(
-      `[dashboard-layout] REDIRECT: no profile for user=${user.id} email=${user.email} error=${profileError?.message || "null"}`
-    );
     redirect("/login");
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { StatCard } from "@/components/ui/card";
+import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { AccountsList } from "@/components/personal/accounts-list";
 import { TransactionsList } from "@/components/personal/transactions-list";
@@ -17,6 +17,7 @@ import type {
   ProjectedIncome,
 } from "@/lib/types";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { EmptyState } from "@/components/empty-state";
 import Link from "next/link";
 
 interface Props {
@@ -37,6 +38,43 @@ export function PersonalDashboard({
   debts,
   categories,
 }: Props) {
+  // Empty state: no accounts connected yet (owned by Agent E)
+  if (accounts.length === 0) {
+    return (
+      <div className="has-bottom-nav space-y-6">
+        <header className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <p className="label-sm">Book</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Personal
+            </h1>
+          </div>
+          <PlaidLinkButton />
+        </header>
+
+        <EmptyState
+          title="Get started with your Personal book"
+          description="Connect a bank account to see transactions, categorize spending, track bills, and watch your plan update daily."
+        >
+          <ul className="space-y-2 text-sm text-muted text-left mx-auto max-w-md">
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+              <span>See every transaction and assign it to a category</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+              <span>Track upcoming bills and recurring subscriptions</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+              <span>Get a daily-updated plan for surplus, deficit, and debt payoff</span>
+            </li>
+          </ul>
+        </EmptyState>
+      </div>
+    );
+  }
+
   const totalCash = accounts
     .filter((a) => a.type === "depository")
     .reduce((sum, a) => sum + Number(a.current_balance), 0);
@@ -96,89 +134,146 @@ export function PersonalDashboard({
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Personal</h1>
+    <div className="has-bottom-nav space-y-8">
+      {/* Page header */}
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="label-sm">Book</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Personal
+          </h1>
+        </div>
         <PlaidLinkButton />
-      </div>
+      </header>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          label="Current Cash"
-          value={formatCurrency(totalCash)}
-          color="text-foreground"
-        />
-        <StatCard
-          label="This Month"
-          value={formatCurrency(surplus)}
-          color={surplus >= 0 ? "text-surplus" : "text-deficit"}
-          subtext={surplus >= 0 ? "surplus" : "deficit"}
-        />
-        <StatCard
-          label="Monthly Subscriptions"
-          value={formatCurrency(totalMonthlySubscriptions)}
-          color="text-warning"
-        />
-        <StatCard
-          label="Monthly Debt Payments"
-          value={formatCurrency(totalMonthlyDebt)}
-          color="text-deficit"
-        />
-        <StatCard
-          label="Upcoming Bills"
-          value={String(upcomingBills.length)}
-          subtext="due this month"
-        />
-      </div>
+      {/* Hero cash card */}
+      <ElevatedCard accent="terracotta">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="label-sm">Current Cash</p>
+            <p className="mt-2 hero-value text-foreground">
+              {formatCurrency(totalCash)}
+            </p>
+          </div>
+          <div className="flex flex-col items-start sm:items-end">
+            <p className="label-sm">This Month</p>
+            <p
+              className={`mt-2 display-value ${surplus >= 0 ? "text-surplus" : "text-deficit"}`}
+            >
+              {surplus >= 0 ? "+" : ""}
+              {formatCurrency(surplus)}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {surplus >= 0 ? "surplus" : "deficit"}
+            </p>
+          </div>
+        </div>
+      </ElevatedCard>
+
+      {/* Stat row */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="label-sm">Monthly Commitments</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard
+            label="Subscriptions"
+            value={formatCurrency(totalMonthlySubscriptions)}
+            color="text-warning"
+            accent="warning"
+          />
+          <StatCard
+            label="Debt Payments"
+            value={formatCurrency(totalMonthlyDebt)}
+            color="text-deficit"
+            accent="deficit"
+          />
+          <StatCard
+            label="Upcoming Bills"
+            value={String(upcomingBills.length)}
+            subtext="due this month"
+          />
+        </div>
+      </section>
 
       {/* Quick links */}
-      <div className="flex gap-3">
-        <Link
-          href="/personal/debts"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-card-hover transition-colors flex-1"
-        >
-          <span className="text-deficit">Debts</span>
-          <span className="ml-auto text-sm font-bold text-deficit">
-            {formatCurrency(totalDebt)}
-          </span>
-        </Link>
-        <Link
-          href="/personal/plan"
-          className="flex items-center gap-2 rounded-lg bg-terracotta/10 border border-terracotta/20 px-4 py-3 text-sm font-medium text-terracotta hover:bg-terracotta/20 transition-colors flex-1"
-        >
-          The Plan
-          <span className="ml-auto text-xs">View &rarr;</span>
-        </Link>
-        <Link
-          href="/personal/catchup"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-card-hover transition-colors flex-1"
-        >
-          <span className="text-surplus">Catch-Up</span>
-          <span className="ml-auto text-xs">Mode &rarr;</span>
-        </Link>
-      </div>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="label-sm">Quick Actions</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Link href="/personal/debts" className="group">
+            <Card
+              interactive
+              accent="deficit"
+              className="flex items-center justify-between"
+            >
+              <div>
+                <p className="label-sm">Debts</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  Track payoff
+                </p>
+              </div>
+              <p className="text-base font-bold num text-deficit">
+                {formatCurrency(totalDebt)}
+              </p>
+            </Card>
+          </Link>
+          <Link href="/personal/plan" className="group">
+            <Card
+              interactive
+              accent="terracotta"
+              className="flex items-center justify-between"
+            >
+              <div>
+                <p className="label-sm">The Plan</p>
+                <p className="mt-1 text-sm font-semibold text-terracotta">
+                  View &rarr;
+                </p>
+              </div>
+              <div className="h-8 w-8 rounded-lg bg-terracotta/15" />
+            </Card>
+          </Link>
+          <Link href="/personal/catchup" className="group">
+            <Card
+              interactive
+              accent="surplus"
+              className="flex items-center justify-between"
+            >
+              <div>
+                <p className="label-sm">Catch-Up</p>
+                <p className="mt-1 text-sm font-semibold text-surplus">
+                  Mode &rarr;
+                </p>
+              </div>
+              <div className="h-8 w-8 rounded-lg bg-surplus/15" />
+            </Card>
+          </Link>
+        </div>
+      </section>
 
       {/* Tabbed content */}
-      <Tabs tabs={tabs} defaultTab="accounts">
-        {(activeTab) => (
-          <>
-            {activeTab === "accounts" && (
-              <AccountsList accounts={accounts} />
-            )}
-            {activeTab === "transactions" && (
-              <TransactionsList
-                transactions={transactions}
-                categories={categories}
-              />
-            )}
-            {activeTab === "bills" && <BillsList bills={bills} />}
-            {activeTab === "subscriptions" && (
-              <SubscriptionsList subscriptions={subscriptions} />
-            )}
-          </>
-        )}
-      </Tabs>
+      <section>
+        <Tabs tabs={tabs} defaultTab="accounts">
+          {(activeTab) => (
+            <>
+              {activeTab === "accounts" && (
+                <AccountsList accounts={accounts} />
+              )}
+              {activeTab === "transactions" && (
+                <TransactionsList
+                  transactions={transactions}
+                  categories={categories}
+                />
+              )}
+              {activeTab === "bills" && <BillsList bills={bills} />}
+              {activeTab === "subscriptions" && (
+                <SubscriptionsList subscriptions={subscriptions} />
+              )}
+            </>
+          )}
+        </Tabs>
+      </section>
     </div>
   );
 }

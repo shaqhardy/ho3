@@ -1,23 +1,253 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #1a1a1a;
-  --color-foreground: #f5f5f5;
-  --color-muted: #a3a3a3;
-  --color-card: #242424;
-  --color-card-hover: #2a2a2a;
-  --color-border: #333333;
+  --color-background: var(--ho3-background);
+  --color-foreground: var(--ho3-foreground);
+  --color-muted: var(--ho3-muted);
+  --color-card: var(--ho3-card);
+  --color-card-hover: var(--ho3-card-hover);
+  --color-card-elevated: var(--ho3-card-elevated);
+  --color-border: var(--ho3-border);
+  --color-border-subtle: var(--ho3-border-subtle);
   --color-terracotta: #CC5500;
   --color-terracotta-hover: #e06000;
-  --color-surplus: #22c55e;
-  --color-deficit: #ef4444;
-  --color-warning: #f59e0b;
+  --color-surplus: var(--ho3-surplus);
+  --color-deficit: var(--ho3-deficit);
+  --color-warning: var(--ho3-warning);
+  --color-accent-blue: var(--ho3-accent-blue);
+  --color-accent-green: var(--ho3-accent-green);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Dark theme - default */
+[data-theme="dark"] {
+  --ho3-background: #1a1a1a;
+  --ho3-foreground: #f5f5f5;
+  --ho3-muted: #a3a3a3;
+  --ho3-card: #242424;
+  --ho3-card-hover: #2a2a2a;
+  --ho3-card-elevated: #2d2a27;
+  --ho3-border: #333333;
+  --ho3-border-subtle: #2a2a2a;
+  --ho3-surplus: #4ade80;
+  --ho3-deficit: #f87171;
+  --ho3-warning: #fbbf24;
+  --ho3-accent-blue: #6b8fb5;
+  --ho3-accent-green: #7ba67b;
+  --ho3-bg-gradient: radial-gradient(
+    ellipse 80% 50% at 50% -10%,
+    rgba(204, 85, 0, 0.04),
+    transparent 60%
+  );
+  --ho3-card-inner-highlight: rgba(255, 255, 255, 0.04);
+  --ho3-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+  --ho3-card-elevated-shadow: 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Light theme - warm cream */
+[data-theme="light"] {
+  --ho3-background: #F7F3E9;
+  --ho3-foreground: #1a1a1a;
+  --ho3-muted: #6b6456;
+  --ho3-card: #fdfbf4;
+  --ho3-card-hover: #f3eedf;
+  --ho3-card-elevated: #fffdf6;
+  --ho3-border: #d9d1bb;
+  --ho3-border-subtle: #e8e2cf;
+  --ho3-surplus: #0f7a3e;
+  --ho3-deficit: #b91c1c;
+  --ho3-warning: #b45309;
+  --ho3-accent-blue: #3b5a7f;
+  --ho3-accent-green: #3d6b3d;
+  --ho3-bg-gradient: radial-gradient(
+    ellipse 80% 50% at 50% -10%,
+    rgba(204, 85, 0, 0.06),
+    transparent 60%
+  );
+  --ho3-card-inner-highlight: rgba(255, 255, 255, 0.8);
+  --ho3-card-shadow: 0 1px 2px rgba(67, 52, 31, 0.06),
+    0 4px 12px rgba(67, 52, 31, 0.04);
+  --ho3-card-elevated-shadow: 0 2px 4px rgba(67, 52, 31, 0.08),
+    0 8px 24px rgba(67, 52, 31, 0.06);
+}
+
+html {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  background-image: var(--ho3-bg-gradient);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeric utilities */
+.num,
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Label utility - small uppercase tracked muted labels */
+.label-sm {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Display value - large bold numbers */
+.display-value {
+  font-size: 1.75rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@media (min-width: 640px) {
+  .display-value {
+    font-size: 2rem;
+  }
+}
+
+/* Hero value - for top-level stats like net worth */
+.hero-value {
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@media (min-width: 640px) {
+  .hero-value {
+    font-size: 3.25rem;
+  }
+}
+
+/* Card depth - top inner highlight */
+.card-depth {
+  position: relative;
+  box-shadow: var(--ho3-card-shadow);
+}
+
+.card-depth::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px 0 0 0;
+  background: linear-gradient(
+    to bottom,
+    var(--ho3-card-inner-highlight),
+    transparent 40%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.card-elevated-depth {
+  position: relative;
+  box-shadow: var(--ho3-card-elevated-shadow);
+}
+
+.card-elevated-depth::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom,
+    var(--ho3-card-inner-highlight),
+    transparent 35%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* HO3 wordmark with accent dot */
+.ho3-wordmark {
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ho3-wordmark::after {
+  content: "";
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: var(--color-terracotta);
+  margin-left: 0.2rem;
+  margin-bottom: 0.1em;
+  vertical-align: middle;
+}
+
+/* Animated toggle icon */
+@keyframes theme-rotate-in {
+  from {
+    transform: rotate(-90deg) scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.theme-icon-enter {
+  animation: theme-rotate-in 0.25s ease-out;
+}
+
+/* Safe-area support */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Mobile bottom nav spacing — leave room so content doesn't hide under it */
+@media (max-width: 1023.98px) {
+  .has-bottom-nav {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* PWA safe-area insets for iPhone notch / home indicator */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

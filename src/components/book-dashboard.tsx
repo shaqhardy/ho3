@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Card, StatCard } from "@/components/ui/card";
+import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { formatCurrency, formatDate, formatRelativeDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Account, Transaction, Subscription, Category, Book } from "@/lib/types";
 import { AccountsList } from "@/components/personal/accounts-list";
+import { EmptyState } from "@/components/empty-state";
 import { Plus, RotateCw, Pause } from "lucide-react";
 
 interface Props {
@@ -29,6 +30,37 @@ export function BookDashboard({
 }: Props) {
   const [showSubForm, setShowSubForm] = useState(false);
   const router = useRouter();
+
+  // Empty state: no accounts assigned to this book yet
+  if (accounts.length === 0) {
+    const description =
+      book === "business"
+        ? "Connect your business accounts to monitor expenses, track Owner Pay, and see upcoming subscription charges."
+        : book === "nonprofit"
+          ? "Connect your nonprofit accounts to track program expenses, donations received, and subscription renewals."
+          : "Connect accounts to start tracking this book.";
+
+    return (
+      <div className="has-bottom-nav space-y-6">
+        <header>
+          <p className="label-sm">Book</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {bookLabel}
+          </h1>
+        </header>
+        <EmptyState
+          title={`Start tracking ${bookLabel}`}
+          description={description}
+          cta={{ label: "Connect an account", href: "/personal" }}
+        >
+          <p className="text-sm text-muted max-w-lg mx-auto leading-relaxed">
+            Accounts are connected from the Personal page and can be reassigned
+            to this book from the admin panel.
+          </p>
+        </EmptyState>
+      </div>
+    );
+  }
 
   const totalBalance = accounts.reduce(
     (sum, a) => sum + Number(a.current_balance),
@@ -103,57 +135,89 @@ export function BookDashboard({
     { id: "subscriptions", label: "Subscriptions", count: upcomingSubs.length },
   ];
 
+  const bookAccent: "blue" | "green" | "terracotta" =
+    book === "business" ? "blue" : book === "nonprofit" ? "green" : "terracotta";
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">{bookLabel}</h1>
+    <div className="has-bottom-nav space-y-8">
+      <header>
+        <p className="label-sm">Book</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {bookLabel}
+        </h1>
+      </header>
 
       <Tabs tabs={tabs} defaultTab="overview">
         {(tab) => (
           <>
             {tab === "overview" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <StatCard
-                    label="Total Balance"
-                    value={formatCurrency(totalBalance)}
-                  />
-                  <StatCard
-                    label="This Month's Expenses"
-                    value={formatCurrency(monthExpenses)}
-                    color="text-deficit"
-                  />
-                  <StatCard
-                    label="Monthly Subscriptions"
-                    value={formatCurrency(totalMonthlySubs)}
-                    color="text-warning"
-                  />
+              <div className="space-y-8">
+                <ElevatedCard accent={bookAccent}>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="label-sm">Total Balance</p>
+                      <p className="mt-2 hero-value text-foreground">
+                        {formatCurrency(totalBalance)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-start sm:items-end">
+                      <p className="label-sm">This Month&apos;s Expenses</p>
+                      <p className="mt-2 display-value text-deficit">
+                        {formatCurrency(monthExpenses)}
+                      </p>
+                    </div>
+                  </div>
+                </ElevatedCard>
+
+                <div>
+                  <div className="mb-3">
+                    <h2 className="label-sm">Monthly Commitments</h2>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+                    <StatCard
+                      label="Monthly Subscriptions"
+                      value={formatCurrency(totalMonthlySubs)}
+                      color="text-warning"
+                      accent="warning"
+                    />
+                    <StatCard
+                      label="Active Subs"
+                      value={String(upcomingSubs.length)}
+                      subtext="recurring"
+                    />
+                  </div>
                 </div>
 
                 {/* Upcoming subscriptions */}
                 {upcomingSubs.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-muted mb-2">
-                      Upcoming Charges
-                    </h3>
-                    <div className="space-y-2">
-                      {upcomingSubs.slice(0, 5).map((sub) => (
-                        <Card
-                          key={sub.id}
-                          className="flex items-center justify-between py-2 px-4"
-                        >
-                          <div>
-                            <p className="text-sm text-foreground">
-                              {sub.name}
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="label-sm">Upcoming Charges</h3>
+                      <span className="text-xs text-muted num">
+                        {upcomingSubs.length} active
+                      </span>
+                    </div>
+                    <div className="card-depth overflow-hidden rounded-xl border border-border-subtle bg-card">
+                      <ul className="divide-y divide-border-subtle">
+                        {upcomingSubs.slice(0, 5).map((sub) => (
+                          <li
+                            key={sub.id}
+                            className="flex items-center justify-between gap-3 px-4 py-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {sub.name}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {formatRelativeDate(sub.next_charge_date)}
+                              </p>
+                            </div>
+                            <p className="text-sm font-semibold num text-foreground">
+                              {formatCurrency(Number(sub.amount))}
                             </p>
-                            <p className="text-xs text-muted">
-                              {formatRelativeDate(sub.next_charge_date)}
-                            </p>
-                          </div>
-                          <p className="text-sm font-semibold">
-                            {formatCurrency(Number(sub.amount))}
-                          </p>
-                        </Card>
-                      ))}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 )}
@@ -161,25 +225,27 @@ export function BookDashboard({
                 {/* Expenses by category */}
                 {Object.keys(expensesByCategory).length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-muted mb-2">
-                      Expenses by Category
-                    </h3>
-                    <div className="space-y-1">
-                      {Object.entries(expensesByCategory)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([cat, amount]) => (
-                          <div
-                            key={cat}
-                            className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-card"
-                          >
-                            <span className="text-sm text-foreground">
-                              {cat}
-                            </span>
-                            <span className="text-sm font-medium">
-                              {formatCurrency(amount)}
-                            </span>
-                          </div>
-                        ))}
+                    <div className="mb-3">
+                      <h3 className="label-sm">Expenses by Category</h3>
+                    </div>
+                    <div className="card-depth overflow-hidden rounded-xl border border-border-subtle bg-card">
+                      <ul className="divide-y divide-border-subtle">
+                        {Object.entries(expensesByCategory)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([cat, amount]) => (
+                            <li
+                              key={cat}
+                              className="flex items-center justify-between px-4 py-2.5"
+                            >
+                              <span className="text-sm text-foreground">
+                                {cat}
+                              </span>
+                              <span className="text-sm font-medium num text-foreground">
+                                {formatCurrency(amount)}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
                     </div>
                   </div>
                 )}
@@ -210,7 +276,7 @@ export function BookDashboard({
                         </p>
                       </div>
                       <p
-                        className={`text-sm font-semibold ${txn.is_income ? "text-surplus" : ""}`}
+                        className={`text-sm font-semibold num ${txn.is_income ? "text-surplus" : ""}`}
                       >
                         {txn.is_income ? "+" : "-"}
                         {formatCurrency(Number(txn.amount))}
@@ -300,7 +366,7 @@ export function BookDashboard({
                         {formatRelativeDate(sub.next_charge_date)}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold">
+                    <p className="text-sm font-semibold num">
                       {formatCurrency(Number(sub.amount))}
                     </p>
                     <button

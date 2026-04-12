@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Card, StatCard } from "@/components/ui/card";
+import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
 import {
   formatCurrency,
   formatRelativeDate,
@@ -23,11 +23,45 @@ import {
   Calendar,
   RotateCw,
 } from "lucide-react";
+import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
 
-const bookConfig: Record<Book, { label: string; icon: typeof Wallet; href: string }> = {
-  personal: { label: "Personal", icon: Wallet, href: "/personal" },
-  business: { label: "Business", icon: Building2, href: "/business" },
-  nonprofit: { label: "Nonprofit", icon: Heart, href: "/nonprofit" },
+type BookAccent = "terracotta" | "blue" | "green";
+
+const bookConfig: Record<
+  Book,
+  {
+    label: string;
+    icon: typeof Wallet;
+    href: string;
+    accent: BookAccent;
+    accentBg: string;
+    accentText: string;
+  }
+> = {
+  personal: {
+    label: "Personal",
+    icon: Wallet,
+    href: "/personal",
+    accent: "terracotta",
+    accentBg: "bg-terracotta/10",
+    accentText: "text-terracotta",
+  },
+  business: {
+    label: "Business",
+    icon: Building2,
+    href: "/business",
+    accent: "blue",
+    accentBg: "bg-accent-blue/10",
+    accentText: "text-accent-blue",
+  },
+  nonprofit: {
+    label: "Nonprofit",
+    icon: Heart,
+    href: "/nonprofit",
+    accent: "green",
+    accentBg: "bg-accent-green/10",
+    accentText: "text-accent-green",
+  },
 };
 
 interface Props {
@@ -45,6 +79,89 @@ export function OverviewDashboard({
   debts,
   recentTransactions,
 }: Props) {
+  // Fully empty state: no accounts and no transactions (owned by Agent E)
+  if (accounts.length === 0 && recentTransactions.length === 0) {
+    return (
+      <div className="has-bottom-nav space-y-6">
+        <header>
+          <p className="label-sm">Dashboard</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Overview
+          </h1>
+        </header>
+        <EmptyState
+          title="Welcome to HO3"
+          description="Three books, one clear picture. Connect your first bank to see your net worth, upcoming bills, and where your money is going."
+          cta={{ label: "Connect your first account", href: "/personal" }}
+        >
+          <div>
+            <p className="label-sm mb-3">Preview</p>
+            <div
+              aria-hidden="true"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-3 opacity-50 pointer-events-none select-none"
+            >
+              {[
+                { label: "Personal", value: "$12,480", icon: Wallet },
+                { label: "Business", value: "$48,120", icon: Building2 },
+                { label: "Nonprofit", value: "$6,340", icon: Heart },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.label}
+                    className="relative rounded-xl border border-dashed border-border bg-card p-5"
+                  >
+                    <span className="absolute -top-2 right-3 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted">
+                      Preview
+                    </span>
+                    <div className="flex items-center gap-2 text-muted">
+                      <Icon className="h-4 w-4 text-terracotta" />
+                      <span className="text-xs">{item.label}</span>
+                    </div>
+                    <p className="mt-2 text-xl font-bold num text-foreground/80">
+                      {item.value}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      +$320 this month
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <ul className="mt-8 space-y-2 text-sm text-muted text-left mx-auto max-w-md">
+              <li className="flex items-start gap-2">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+                <span>Track bills across Personal, Business, and Nonprofit</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+                <span>Project your cash runway</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+                <span>Plan debt payoff</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-terracotta shrink-0" />
+                <span>OCR receipts</span>
+              </li>
+            </ul>
+          </div>
+        </EmptyState>
+      </div>
+    );
+  }
+
+  // Partial empty: accounts connected but no transactions synced yet (owned by Agent E)
+  const sparseBanner =
+    accounts.length > 0 && recentTransactions.length === 0 ? (
+      <EmptyStateBanner
+        title="Your accounts are connected."
+        description="Transactions usually sync within a few minutes."
+      />
+    ) : null;
+
   // Net worth by book
   const bookBalances: Record<Book, number> = {
     personal: 0,
@@ -85,6 +202,9 @@ export function OverviewDashboard({
     }
   }
 
+  const totalAssets =
+    bookBalances.personal + bookBalances.business + bookBalances.nonprofit;
+
   // Upcoming bills + subs in next 14 days
   const upcoming14 = [
     ...bills
@@ -114,138 +234,208 @@ export function OverviewDashboard({
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Overview</h1>
+    <div className="has-bottom-nav space-y-8">
+      {/* Page header */}
+      <header className="flex items-end justify-between">
+        <div>
+          <p className="label-sm">Dashboard</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Overview
+          </h1>
+        </div>
+      </header>
 
-      {/* Net worth */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          label="Net Worth"
-          value={formatCurrency(netWorth)}
-          color={netWorth >= 0 ? "text-surplus" : "text-deficit"}
-        />
-        {(["personal", "business", "nonprofit"] as Book[]).map((book) => (
-          <StatCard
-            key={book}
-            label={bookConfig[book].label}
-            value={formatCurrency(bookBalances[book])}
-            subtext={
-              bookSurplus[book] !== 0
-                ? `${bookSurplus[book] >= 0 ? "+" : ""}${formatCurrency(bookSurplus[book])} this month`
-                : undefined
-            }
-            color={
-              bookSurplus[book] > 0
+      {sparseBanner}
+
+      {/* Hero net worth */}
+      <ElevatedCard>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="label-sm">Net Worth</p>
+            <p
+              className={`mt-2 hero-value ${netWorth >= 0 ? "text-foreground" : "text-deficit"}`}
+            >
+              {formatCurrency(netWorth)}
+            </p>
+            <p className="mt-2 text-xs text-muted num">
+              <span className="text-surplus">
+                {formatCurrency(totalAssets)}
+              </span>{" "}
+              assets
+              {totalDebt > 0 && (
+                <>
+                  {" · "}
+                  <span className="text-deficit">
+                    {formatCurrency(totalDebt)}
+                  </span>{" "}
+                  debt
+                </>
+              )}
+            </p>
+          </div>
+
+          <dl className="grid grid-cols-3 gap-4 sm:gap-8">
+            {(["personal", "business", "nonprofit"] as Book[]).map((book) => (
+              <div key={book} className="text-left sm:text-right">
+                <dt className="label-sm">{bookConfig[book].label}</dt>
+                <dd className="mt-1 text-base font-semibold num text-foreground sm:text-lg">
+                  {formatCurrency(bookBalances[book])}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </ElevatedCard>
+
+      {/* Per-book stat row */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="label-sm">Books · This Month</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(["personal", "business", "nonprofit"] as Book[]).map((book) => {
+            const surplus = bookSurplus[book];
+            const valueColor =
+              surplus > 0
                 ? "text-surplus"
-                : bookSurplus[book] < 0
+                : surplus < 0
                   ? "text-deficit"
-                  : "text-foreground"
-            }
-          />
-        ))}
-      </div>
+                  : "text-foreground";
+            return (
+              <StatCard
+                key={book}
+                label={bookConfig[book].label}
+                value={formatCurrency(bookBalances[book])}
+                subtext={
+                  surplus !== 0
+                    ? `${surplus >= 0 ? "+" : ""}${formatCurrency(surplus)} this month`
+                    : "no change this month"
+                }
+                color={valueColor}
+                accent={bookConfig[book].accent}
+              />
+            );
+          })}
+        </div>
+      </section>
 
       {/* Book quick links */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {(["personal", "business", "nonprofit"] as Book[]).map((book) => {
-          const config = bookConfig[book];
-          const Icon = config.icon;
-          const bookAccounts = accounts.filter((a) => a.book === book);
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="label-sm">Jump to Book</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(["personal", "business", "nonprofit"] as Book[]).map((book) => {
+            const config = bookConfig[book];
+            const Icon = config.icon;
+            const bookAccounts = accounts.filter((a) => a.book === book);
 
-          return (
-            <Link key={book} href={config.href}>
-              <Card className="flex items-center gap-3 hover:bg-card-hover transition-colors cursor-pointer">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-terracotta/10">
-                  <Icon className="h-5 w-5 text-terracotta" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {config.label}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {bookAccounts.length} account
-                    {bookAccounts.length !== 1 ? "s" : ""} ·{" "}
-                    {formatCurrency(bookBalances[book])}
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted" />
-              </Card>
-            </Link>
-          );
-        })}
-      </div>
+            return (
+              <Link key={book} href={config.href} className="group">
+                <Card
+                  interactive
+                  accent={config.accent}
+                  className="flex items-center gap-4"
+                >
+                  <div
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${config.accentBg}`}
+                  >
+                    <Icon className={`h-5 w-5 ${config.accentText}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {config.label}
+                    </p>
+                    <p className="text-xs text-muted num">
+                      {bookAccounts.length} account
+                      {bookAccounts.length !== 1 ? "s" : ""} ·{" "}
+                      {formatCurrency(bookBalances[book])}
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Upcoming in next 14 days */}
       {upcoming14.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-foreground mb-3">
-            Upcoming (Next 14 Days)
-          </h2>
-          <div className="space-y-2">
-            {upcoming14.map((item) => (
-              <Card
-                key={`${item.type}-${item.id}`}
-                className="flex items-center gap-3 py-3 px-4"
-              >
-                {item.type === "bill" ? (
-                  <Calendar className="h-4 w-4 text-muted" />
-                ) : (
-                  <RotateCw className="h-4 w-4 text-muted" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {formatRelativeDate(item.date)} ·{" "}
-                    <span className="capitalize">{item.book}</span>
-                  </p>
-                </div>
-                <p className="text-sm font-semibold text-foreground">
-                  {formatCurrency(item.amount)}
-                </p>
-              </Card>
-            ))}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="label-sm">Upcoming · Next 14 Days</h2>
+            <span className="text-xs text-muted num">
+              {upcoming14.length} item{upcoming14.length !== 1 ? "s" : ""}
+            </span>
           </div>
-        </div>
+          <div className="card-depth overflow-hidden rounded-xl border border-border-subtle bg-card">
+            <ul className="divide-y divide-border-subtle">
+              {upcoming14.map((item) => (
+                <li
+                  key={`${item.type}-${item.id}`}
+                  className="flex items-center gap-3 px-4 py-3"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-background/40 text-muted">
+                    {item.type === "bill" ? (
+                      <Calendar className="h-4 w-4" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {formatRelativeDate(item.date)} ·{" "}
+                      <span className="capitalize">{item.book}</span>
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold num text-foreground">
+                    {formatCurrency(item.amount)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       )}
 
       {/* Debt summary */}
       {totalDebt > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Debt Summary
-            </h2>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="label-sm">Debt Summary</h2>
             <Link
               href="/personal/debts"
-              className="text-xs text-terracotta hover:underline"
+              className="text-xs font-medium text-terracotta hover:underline"
             >
               Manage &rarr;
             </Link>
           </div>
-          <Card>
+          <Card accent="deficit">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted">Total Debt</p>
-              <p className="text-lg font-bold text-deficit">
+              <p className="label-sm">Total Debt</p>
+              <p className="display-value text-deficit">
                 {formatCurrency(totalDebt)}
               </p>
             </div>
-            <div className="mt-2 space-y-1">
+            <ul className="mt-4 space-y-1.5">
               {debts.map((d) => (
-                <div
+                <li
                   key={d.id}
                   className="flex items-center justify-between text-xs"
                 >
                   <span className="text-muted">{d.creditor}</span>
-                  <span className="text-foreground">
+                  <span className="num text-foreground">
                     {formatCurrency(Number(d.current_balance))}
                   </span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </Card>
-        </div>
+        </section>
       )}
     </div>
   );

@@ -186,47 +186,90 @@ export default function PrivacyPage() {
           </section>
 
           <section id="data-retention" className="scroll-mt-4">
-            <h2 className="text-base font-semibold text-foreground mb-3">
+            <h2 className="text-base font-semibold text-foreground mb-2">
               Data Retention and Deletion
             </h2>
+            <p className="text-xs text-muted mb-4">
+              Effective Date: April 11, 2026 &nbsp;|&nbsp; Last Reviewed: April
+              11, 2026 &nbsp;|&nbsp;{" "}
+              <a
+                href="/docs/HO3-Data-Retention-Policy.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-terracotta underline"
+              >
+                Download PDF
+              </a>
+            </p>
 
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Retention period
+                  1. Scope
+                </h3>
+                <p>
+                  HO3 is a private personal finance application used
+                  exclusively by two authorized users (the account owner and
+                  spouse). This policy governs the retention and deletion of
+                  all consumer financial data collected, processed, or stored
+                  by the application, including data retrieved through the
+                  Plaid API.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  2. Data Retained
+                </h3>
+                <p>
+                  HO3 retains the following categories of data: account
+                  balances and transaction history retrieved from connected
+                  financial institutions via Plaid; liability details including
+                  credit card and loan balances, APRs, and minimum payments;
+                  user-provided categorizations, notes, and uploaded receipt or
+                  statement images; encrypted Plaid access tokens required to
+                  maintain bank connections; and account profile information
+                  including email and authentication credentials.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  3. Retention Period
                 </h3>
                 <p>
                   Financial data is retained for as long as the user maintains
                   an active HO3 account. Active accounts retain transaction
-                  history for analytical and budgeting purposes.
+                  history for analytical and budgeting purposes. No data is
+                  sold, shared, or transferred to any third party.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Deletion upon request
+                  4. Deletion Upon Request
                 </h3>
                 <p>
                   Users may request deletion of their account and all
-                  associated data at any time. Upon a deletion request, Plaid
-                  access tokens are immediately revoked and all bank
-                  connections terminated. All user data including transactions,
-                  balances, liabilities, receipts, and uploaded statements is
-                  permanently removed from the active database within 30 days.
-                  Backup copies are retained for an additional 30-day rolling
-                  window for disaster recovery purposes, then permanently
-                  purged.
+                  associated data at any time. Upon a deletion request: (a)
+                  Plaid access tokens are immediately revoked, terminating all
+                  bank connections; (b) all user data, including transactions,
+                  balances, liabilities, receipts, and uploaded statements, is
+                  permanently removed from the active database within 30 days;
+                  (c) backup copies are retained for an additional 30-day
+                  rolling window for disaster recovery purposes, after which
+                  they are permanently purged.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Automatic deletion
+                  5. Automatic Deletion
                 </h3>
                 <p>
                   Inactive accounts (no login for 24 consecutive months) are
-                  flagged for automatic deletion. The account holder is
-                  notified 30 days prior to deletion and may reactivate by
+                  flagged for automatic deletion. The account holder receives
+                  notice 30 days prior to deletion and may reactivate by
                   logging in. Failure to reactivate results in permanent data
                   removal following the same procedure as a manual deletion
                   request.
@@ -235,14 +278,14 @@ export default function PrivacyPage() {
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Compliance
+                  6. Compliance
                 </h3>
                 <p>
                   This policy is designed to comply with applicable U.S. data
                   privacy laws, including the principles of the California
-                  Consumer Privacy Act (CCPA) and the Gramm-Leach-Bliley Act
-                  (GLBA) safeguards rules. As a private two-user application,
-                  HO3 does not sell consumer data, does not share data with
+                  Consumer Privacy Act (CCPA) and Gramm-Leach-Bliley Act (GLBA)
+                  safeguards rules. As a private two-user application, HO3
+                  does not sell consumer data, does not share data with
                   advertisers, and does not engage in any processing activity
                   that would trigger additional regulatory obligations.
                 </p>
@@ -250,22 +293,25 @@ export default function PrivacyPage() {
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Periodic review
+                  7. Periodic Review
                 </h3>
                 <p>
                   This policy is reviewed at least annually by the account
-                  owner. The most recent review date is displayed on the
-                  privacy policy page.{" "}
-                  <strong>Last reviewed: April 11, 2026.</strong>
+                  owner. Reviews verify that retention periods remain
+                  appropriate, that deletion procedures function as
+                  documented, and that the policy reflects current applicable
+                  law. The most recent review date is recorded at the top of
+                  this document.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Contact for deletion requests
+                  8. Contact
                 </h3>
                 <p>
-                  Requests may be directed to the account owner via the
+                  Requests related to this policy, including data deletion
+                  requests, may be directed to the account owner via the
                   contact email associated with the HO3 account:{" "}
                   <a
                     href="mailto:shaq@shaqhardy.com"

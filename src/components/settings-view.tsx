@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Card, ElevatedCard } from "@/components/ui/card";
-import { Bell, BellOff, Smartphone, Trash2, Check } from "lucide-react";
+import { Bell, BellOff, Smartphone, Trash2, Check, Shield, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 interface Profile {
   id: string;
@@ -60,6 +61,9 @@ export function SettingsView({
   const [subscriptions, setSubscriptions] =
     useState<Subscription[]>(initialSubscriptions);
   const [pushSupported, setPushSupported] = useState(false);
+  const [backupCodesRemaining, setBackupCodesRemaining] = useState<number | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [newCodes, setNewCodes] = useState<string[] | null>(null);
   const [permissionState, setPermissionState] =
     useState<NotificationPermission>("default");
   const [isSubscribedHere, setIsSubscribedHere] = useState(false);
@@ -83,7 +87,36 @@ export function SettingsView({
         setIsSubscribedHere(!!sub);
       });
     }
+
+    // Fetch backup codes status
+    fetch("/api/auth/mfa-backup-codes/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.remaining === "number") setBackupCodesRemaining(d.remaining);
+      })
+      .catch(() => {});
   }, []);
+
+  async function regenerateBackupCodes() {
+    if (
+      !confirm(
+        "Generate new recovery codes? Your existing codes will be invalidated."
+      )
+    )
+      return;
+    setRegenerating(true);
+    const res = await fetch("/api/auth/mfa-backup-codes/generate", {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (res.ok && data.codes) {
+      setNewCodes(data.codes);
+      setBackupCodesRemaining(data.codes.length);
+    } else {
+      alert(`Failed: ${data.error || "Unknown error"}`);
+    }
+    setRegenerating(false);
+  }
 
   async function enableNotifications() {
     setLoading(true);
@@ -245,6 +278,113 @@ export function SettingsView({
           </Card>
         </section>
       )}
+
+      {/* Security */}
+      <section>
+        <div className="mb-3">
+          <h2 className="label-sm">Security</h2>
+        </div>
+        <ElevatedCard accent="terracotta">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-terracotta/15">
+              <Shield className="h-5 w-5 text-terracotta" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-semibold text-foreground">
+                Recovery Codes
+              </h3>
+              {backupCodesRemaining !== null && (
+                <p className="mt-1 text-sm text-muted">
+                  {backupCodesRemaining > 0 ? (
+                    <>
+                      You have{" "}
+                      <span
+                        className={`font-semibold ${
+                          backupCodesRemaining <= 3
+                            ? "text-warning"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {backupCodesRemaining} recovery code
+                        {backupCodesRemaining === 1 ? "" : "s"}
+                      </span>{" "}
+                      available.
+                    </>
+                  ) : (
+                    <span className="text-warning">
+                      No recovery codes on file. Generate a set so you can
+                      regain access if you lose your authenticator.
+                    </span>
+                  )}
+                </p>
+              )}
+              <button
+                onClick={regenerateBackupCodes}
+                disabled={regenerating}
+                className="mt-3 rounded-lg bg-terracotta px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-terracotta-hover disabled:opacity-50"
+              >
+                {regenerating
+                  ? "Generating..."
+                  : backupCodesRemaining && backupCodesRemaining > 0
+                    ? "Regenerate codes"
+                    : "Generate codes"}
+              </button>
+            </div>
+          </div>
+
+          {newCodes && (
+            <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-4">
+              <p className="mb-2 text-xs font-semibold text-warning">
+                Save these codes now — they won&apos;t be shown again.
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs text-foreground">
+                {newCodes.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-muted w-4">{i + 1}.</span>
+                    <span className="tracking-wider">{c}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(newCodes.join("\n"));
+                }}
+                className="mt-3 text-xs text-terracotta hover:underline"
+              >
+                Copy all
+              </button>
+              <button
+                onClick={() => setNewCodes(null)}
+                className="ml-3 mt-3 text-xs text-muted hover:text-foreground"
+              >
+                Hide
+              </button>
+            </div>
+          )}
+        </ElevatedCard>
+
+        {profile?.role === "admin" && (
+          <Link
+            href="/settings/admin"
+            className="mt-3 flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-card-hover transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-terracotta/10">
+                <Shield className="h-4 w-4 text-terracotta" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  User &amp; MFA Management
+                </p>
+                <p className="text-xs text-muted">
+                  Unenroll MFA for other users · View audit log
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted" />
+          </Link>
+        )}
+      </section>
 
       {/* Notifications */}
       <section>

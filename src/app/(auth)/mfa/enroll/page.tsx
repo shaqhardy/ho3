@@ -80,7 +80,9 @@ export default function MFAEnrollPage() {
       });
     }
 
-    window.location.href = "/overview";
+    // Send to backup codes page — they just enrolled, they need recovery
+    // codes before reaching the dashboard.
+    window.location.href = "/mfa/backup-codes";
   }
 
   return (

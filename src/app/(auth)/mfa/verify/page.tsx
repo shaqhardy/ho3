@@ -132,16 +132,25 @@ export default function MFAVerifyPage() {
           </button>
         </form>
 
-        <button
-          onClick={async () => {
-            const supabase = createClient();
-            await supabase.auth.signOut();
-            window.location.href = "/login";
-          }}
-          className="mt-6 w-full text-center text-xs text-muted hover:text-foreground transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="mt-6 flex items-center justify-center gap-4 text-xs">
+          <a
+            href="/mfa/recover"
+            className="text-terracotta hover:underline"
+          >
+            Use a recovery code
+          </a>
+          <span className="text-border">·</span>
+          <button
+            onClick={async () => {
+              const supabase = createClient();
+              await supabase.auth.signOut();
+              window.location.href = "/login";
+            }}
+            className="text-muted hover:text-foreground transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );

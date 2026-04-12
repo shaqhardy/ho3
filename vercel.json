@@ -1,11 +1,12 @@
 {
+  "_comment": "Cron schedule notes: 0 12 * * * runs daily at 12:00 UTC. This produces 7:00 AM CDT in summer (DST active, UTC-5) and 6:00 AM CST in winter (DST inactive, UTC-6). Vercel cron is UTC-only with no DST awareness, so we optimize for summer (when seasonal income lands and bills are heavier) and accept a one-hour-early fire during Central Standard Time. If winter-accurate 7am is ever preferred, change to '0 13 * * *' (7am CST winter, 8am CDT summer).",
   "framework": "nextjs",
   "installCommand": "bun install",
   "buildCommand": "bun run build",
   "crons": [
     {
       "path": "/api/cron/daily",
-      "schedule": "0 14 * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }

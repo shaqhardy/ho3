@@ -82,8 +82,11 @@ export default function MFAEnrollPage() {
       return;
     }
 
-    router.push("/overview");
-    router.refresh();
+    // Force the browser client to persist the AAL2 token to cookies
+    await supabase.auth.refreshSession();
+
+    // Hard redirect — full page load ensures the proxy reads the new cookie
+    window.location.href = "/overview";
   }
 
   return (

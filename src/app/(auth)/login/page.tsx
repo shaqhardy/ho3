@@ -25,10 +25,21 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
       setLoading(false);
-    } else {
-      router.push("/overview");
-      router.refresh();
+      return;
     }
+
+    // Check MFA status after password auth
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const verifiedTotp = factors?.totp?.find((f) => f.status === "verified");
+
+    if (!verifiedTotp) {
+      // Not enrolled in MFA yet — send to enrollment
+      router.push("/mfa/enroll");
+    } else {
+      // Enrolled — send to verification
+      router.push("/mfa/verify");
+    }
+    router.refresh();
   }
 
   return (

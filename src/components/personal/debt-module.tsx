@@ -150,13 +150,24 @@ export function DebtModule({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Debt Accounts</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1.5 rounded-lg bg-terracotta px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-terracotta-hover"
-        >
-          <Plus className="h-4 w-4" />
-          Add Debt
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              await fetch("/api/plaid/sync-liabilities", { method: "POST" });
+              router.refresh();
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-foreground hover:bg-card-hover"
+          >
+            Sync from Plaid
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1.5 rounded-lg bg-terracotta px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-terracotta-hover"
+          >
+            <Plus className="h-4 w-4" />
+            Add Debt
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

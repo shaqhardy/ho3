@@ -11,7 +11,12 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const response = await fetch("https://sandbox.plaid.com/link/token/create", {
+  const plaidBaseUrl =
+    process.env.PLAID_ENV === "production"
+      ? "https://production.plaid.com"
+      : "https://sandbox.plaid.com";
+
+  const response = await fetch(`${plaidBaseUrl}/link/token/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -19,7 +24,7 @@ export async function POST() {
       secret: process.env.PLAID_SECRET,
       user: { client_user_id: user.id },
       client_name: "HO3",
-      products: ["transactions"],
+      products: ["transactions", "liabilities"],
       country_codes: ["US"],
       language: "en",
     }),

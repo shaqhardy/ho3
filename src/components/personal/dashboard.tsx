@@ -17,6 +17,7 @@ import type {
   ProjectedIncome,
 } from "@/lib/types";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import Link from "next/link";
 
 interface Props {
   accounts: Account[];
@@ -78,6 +79,11 @@ export function PersonalDashboard({
 
   const upcomingBills = bills.filter((b) => b.status === "upcoming");
 
+  const totalDebt = debts.reduce(
+    (sum, d) => sum + Number(d.current_balance),
+    0
+  );
+
   const tabs = [
     { id: "accounts", label: "Accounts", count: accounts.length },
     { id: "transactions", label: "Transactions", count: transactions.length },
@@ -124,6 +130,33 @@ export function PersonalDashboard({
           value={String(upcomingBills.length)}
           subtext="due this month"
         />
+      </div>
+
+      {/* Quick links */}
+      <div className="flex gap-3">
+        <Link
+          href="/personal/debts"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-card-hover transition-colors flex-1"
+        >
+          <span className="text-deficit">Debts</span>
+          <span className="ml-auto text-sm font-bold text-deficit">
+            {formatCurrency(totalDebt)}
+          </span>
+        </Link>
+        <Link
+          href="/personal/plan"
+          className="flex items-center gap-2 rounded-lg bg-terracotta/10 border border-terracotta/20 px-4 py-3 text-sm font-medium text-terracotta hover:bg-terracotta/20 transition-colors flex-1"
+        >
+          The Plan
+          <span className="ml-auto text-xs">View &rarr;</span>
+        </Link>
+        <Link
+          href="/personal/catchup"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-card-hover transition-colors flex-1"
+        >
+          <span className="text-surplus">Catch-Up</span>
+          <span className="ml-auto text-xs">Mode &rarr;</span>
+        </Link>
       </div>
 
       {/* Tabbed content */}

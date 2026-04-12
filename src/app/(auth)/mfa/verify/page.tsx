@@ -51,8 +51,7 @@ export default function MFAVerifyPage() {
     setLoading(true);
     setError(null);
 
-    // Call server-side API route — it handles challenge+verify and sets
-    // the AAL2 cookie via Set-Cookie headers on the response
+    // Step 1: Server-side MFA verification (sets Set-Cookie headers AND returns tokens)
     const res = await fetch("/api/auth/mfa-verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +67,20 @@ export default function MFAVerifyPage() {
       return;
     }
 
-    // Hard redirect — browser now has AAL2 cookies from the API response
+    // Step 2: Also set the session on the browser client directly
+    // This writes AAL2 cookies via @supabase/ssr's built-in cookie handler
+    // Belt-and-suspenders: even if Set-Cookie headers from step 1 work,
+    // this ensures the browser client's internal state is also AAL2
+    if (data.access_token && data.refresh_token) {
+      const supabase = createClient();
+      await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+    }
+
+    // Step 3: Hard redirect — browser should have AAL2 cookies from
+    // either the Set-Cookie headers or setSession() or both
     window.location.href = "/overview";
   }
 

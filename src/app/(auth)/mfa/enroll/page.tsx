@@ -71,7 +71,15 @@ export default function MFAEnrollPage() {
       return;
     }
 
-    // Hard redirect — browser now has AAL2 cookies from the API response
+    // Also set the session on the browser client directly
+    if (data.access_token && data.refresh_token) {
+      const supabase = createClient();
+      await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+    }
+
     window.location.href = "/overview";
   }
 

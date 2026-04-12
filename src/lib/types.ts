@@ -107,6 +107,9 @@ export interface Debt {
   minimum_payment: number;
   statement_due_date: string;
   payoff_strategy_override: PayoffStrategy | null;
+  projected_payoff_months: number | null;
+  projected_total_interest: number | null;
+  last_synced_at: string | null;
   created_at: string;
 }
 

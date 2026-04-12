@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
 
 export async function POST() {
   const supabase = await createClient();
@@ -189,9 +190,13 @@ export async function POST() {
     }
   }
 
+  // Sync liabilities and recalculate payoff projections
+  const liabilitiesSynced = await syncLiabilities(adminSupabase, plaidItems);
+
   return NextResponse.json({
     success: true,
     added: totalAdded,
     modified: totalModified,
+    liabilities_synced: liabilitiesSynced,
   });
 }

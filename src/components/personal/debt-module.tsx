@@ -261,11 +261,17 @@ export function DebtModule({
       ) : (
         <div className="space-y-4">
           {debts.map((debt) => {
-            const payoff = calculatePayoff(
-              Number(debt.current_balance),
-              Number(debt.apr),
-              Number(debt.minimum_payment)
-            );
+            // Use stored projections from Plaid sync, fall back to client calc
+            const payoff = debt.projected_payoff_months != null
+              ? {
+                  months: debt.projected_payoff_months as number,
+                  totalInterest: Number(debt.projected_total_interest) || 0,
+                }
+              : calculatePayoff(
+                  Number(debt.current_balance),
+                  Number(debt.apr),
+                  Number(debt.minimum_payment)
+                );
             const debtStatements = statements.filter(
               (s) => s.debt_id === debt.id
             );
@@ -317,6 +323,11 @@ export function DebtModule({
                     )}
                   </div>
                 </div>
+                {debt.last_synced_at && (
+                  <p className="text-[10px] text-muted">
+                    Last synced: {new Date(String(debt.last_synced_at)).toLocaleString()}
+                  </p>
+                )}
 
                 {/* Statement upload */}
                 <div className="flex items-center justify-between border-t border-border pt-3">

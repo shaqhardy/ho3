@@ -23,13 +23,9 @@ export default function MFAEnrollPage() {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const totp = factors?.totp?.find((f) => f.status === "verified");
       if (totp) {
-        // Already enrolled, go to verify
         router.replace("/mfa/verify");
         return;
       }
-
-      // Clean slate — unenroll any existing unverified factors
-      // (listFactors only returns verified ones, so we proceed to enroll)
 
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
@@ -58,34 +54,24 @@ export default function MFAEnrollPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-
-    const { data: challenge, error: challengeError } =
-      await supabase.auth.mfa.challenge({ factorId });
-
-    if (challengeError) {
-      setError(challengeError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { error: verifyError } = await supabase.auth.mfa.verify({
-      factorId,
-      challengeId: challenge.id,
-      code,
+    // Call server-side API route — it handles challenge+verify and sets
+    // the AAL2 cookie via Set-Cookie headers on the response
+    const res = await fetch("/api/auth/mfa-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ factorId, code }),
     });
 
-    if (verifyError) {
-      setError(verifyError.message);
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Verification failed. Try again.");
       setCode("");
       setLoading(false);
       return;
     }
 
-    // Force the browser client to persist the AAL2 token to cookies
-    await supabase.auth.refreshSession();
-
-    // Hard redirect — full page load ensures the proxy reads the new cookie
+    // Hard redirect — browser now has AAL2 cookies from the API response
     window.location.href = "/overview";
   }
 

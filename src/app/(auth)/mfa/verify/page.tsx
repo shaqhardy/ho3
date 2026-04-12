@@ -15,7 +15,6 @@ export default function MFAVerifyPage() {
     async function checkFactors() {
       const supabase = createClient();
 
-      // Check if user is logged in
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -24,7 +23,6 @@ export default function MFAVerifyPage() {
         return;
       }
 
-      // Check AAL — if already aal2, go to dashboard
       const { data: aal } =
         await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === "aal2") {
@@ -32,12 +30,10 @@ export default function MFAVerifyPage() {
         return;
       }
 
-      // Get verified TOTP factor
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const totp = factors?.totp?.find((f) => f.status === "verified");
 
       if (!totp) {
-        // Not enrolled yet — redirect to enroll
         router.replace("/mfa/enroll");
         return;
       }
@@ -55,34 +51,24 @@ export default function MFAVerifyPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-
-    const { data: challenge, error: challengeError } =
-      await supabase.auth.mfa.challenge({ factorId });
-
-    if (challengeError) {
-      setError(challengeError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { error: verifyError } = await supabase.auth.mfa.verify({
-      factorId,
-      challengeId: challenge.id,
-      code,
+    // Call server-side API route — it handles challenge+verify and sets
+    // the AAL2 cookie via Set-Cookie headers on the response
+    const res = await fetch("/api/auth/mfa-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ factorId, code }),
     });
 
-    if (verifyError) {
-      setError("Invalid code. Try again.");
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Verification failed. Try again.");
       setCode("");
       setLoading(false);
       return;
     }
 
-    // Force the browser client to persist the AAL2 token to cookies
-    await supabase.auth.refreshSession();
-
-    // Hard redirect — full page load ensures the proxy reads the new cookie
+    // Hard redirect — browser now has AAL2 cookies from the API response
     window.location.href = "/overview";
   }
 
@@ -138,7 +124,7 @@ export default function MFAVerifyPage() {
           onClick={async () => {
             const supabase = createClient();
             await supabase.auth.signOut();
-            router.push("/login");
+            window.location.href = "/login";
           }}
           className="mt-6 w-full text-center text-xs text-muted hover:text-foreground transition-colors"
         >

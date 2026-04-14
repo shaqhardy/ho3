@@ -16,10 +16,13 @@ import {
   totalAssets as computeTotalAssets,
   totalLiabilities as computeTotalLiabilities,
 } from "@/lib/accounts/money";
+import { BOOK_LABELS } from "@/lib/books";
+import { CategoryDonut } from "@/components/charts/category-donut";
+import { IncomeVsExpenses } from "@/components/charts/income-vs-expenses";
 
 interface Props {
   book: Book;
-  bookLabel: string;
+  bookLabel?: string;
   accounts: Account[];
   transactions: (Transaction & { categories: { name: string } | null })[];
   subscriptions: Subscription[];
@@ -28,12 +31,13 @@ interface Props {
 
 export function BookDashboard({
   book,
-  bookLabel,
+  bookLabel: bookLabelProp,
   accounts,
   transactions,
   subscriptions,
   categories,
 }: Props) {
+  const bookLabel = bookLabelProp ?? BOOK_LABELS[book];
   const [showSubForm, setShowSubForm] = useState(false);
   const router = useRouter();
 
@@ -237,6 +241,23 @@ export function BookDashboard({
                     />
                   </div>
                 </div>
+
+                {/* Charts */}
+                {transactions.length > 0 && (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <Card>
+                      <CategoryDonut
+                        transactions={transactions as unknown as Parameters<typeof CategoryDonut>[0]["transactions"]}
+                      />
+                    </Card>
+                    <Card>
+                      <IncomeVsExpenses
+                        transactions={transactions as unknown as Parameters<typeof IncomeVsExpenses>[0]["transactions"]}
+                        months={6}
+                      />
+                    </Card>
+                  </div>
+                )}
 
                 {/* Upcoming subscriptions */}
                 {upcomingSubs.length > 0 && (

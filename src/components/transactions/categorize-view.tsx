@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, ElevatedCard } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Check, Loader2, Sparkles } from "lucide-react";
+import { BOOK_LABELS } from "@/lib/books";
 
 type Book = "personal" | "business" | "nonprofit";
 
@@ -30,7 +31,7 @@ interface Completeness {
 
 interface Props {
   book: Book;
-  bookLabel: string;
+  bookLabel?: string;
   completeness: Completeness;
   uncategorized: TxnLite[];
   categories: { id: string; name: string }[];
@@ -46,11 +47,12 @@ interface MerchantGroup {
 
 export function CategorizeView({
   book,
-  bookLabel,
+  bookLabel: bookLabelProp,
   completeness,
   uncategorized,
   categories,
 }: Props) {
+  const bookLabel = bookLabelProp ?? BOOK_LABELS[book];
   const router = useRouter();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);

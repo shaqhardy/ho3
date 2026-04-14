@@ -73,11 +73,9 @@ type PendingToast = {
   scheduledAt: number;
 };
 
-const BOOK_LABELS: Record<Book, string> = {
-  personal: "Personal",
-  business: "Business",
-  nonprofit: "Nonprofit",
-};
+import { BOOK_LABELS as BOOK_DISPLAY } from "@/lib/books";
+
+const BOOK_LABELS: Record<Book, string> = BOOK_DISPLAY;
 
 const BOOK_ORDER: Book[] = ["personal", "business", "nonprofit"];
 

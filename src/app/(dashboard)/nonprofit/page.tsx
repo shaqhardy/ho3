@@ -27,7 +27,7 @@ export default async function NonprofitPage() {
       .select("*, categories(name)")
       .eq("book", "nonprofit")
       .order("date", { ascending: false })
-      .limit(100),
+      .limit(5000),
     supabase
       .from("subscriptions")
       .select("*")

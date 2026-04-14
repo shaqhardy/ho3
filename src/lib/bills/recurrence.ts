@@ -5,7 +5,13 @@
 // bill's `frequency`. If frequency is null or is_recurring=false, we leave it
 // alone (one-shot bill).
 
-export type Frequency = "weekly" | "monthly" | "quarterly" | "yearly" | null;
+export type Frequency =
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "yearly"
+  | null;
 
 function parseYmd(ymd: string): Date {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -30,6 +36,10 @@ export function advanceDueDate(
 
   if (frequency === "weekly") {
     d.setUTCDate(d.getUTCDate() + 7);
+    return toYmd(d);
+  }
+  if (frequency === "biweekly") {
+    d.setUTCDate(d.getUTCDate() + 14);
     return toYmd(d);
   }
 

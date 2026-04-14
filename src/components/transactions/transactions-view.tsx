@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Card, ElevatedCard } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { TopMerchants } from "@/components/charts/top-merchants";
 import type {
   TxnRow,
   CatRow,
@@ -34,13 +35,14 @@ import type {
   BillRow,
 } from "@/lib/transactions/load";
 import type { Book } from "@/lib/types";
+import { BOOK_LABELS } from "@/lib/books";
 
 type SortKey = "date" | "merchant" | "amount" | "category" | "account";
 type SortDir = "asc" | "desc";
 
 interface Props {
   book: Book;
-  bookLabel: string;
+  bookLabel?: string;
   transactions: TxnRow[];
   categories: CatRow[];
   accounts: AcctRow[];
@@ -62,13 +64,14 @@ const DATE_PRESETS = [
 
 export function TransactionsView({
   book,
-  bookLabel,
+  bookLabel: bookLabelProp,
   transactions,
   categories,
   accounts,
   bills,
   completeness,
 }: Props) {
+  const bookLabel = bookLabelProp ?? BOOK_LABELS[book];
   const router = useRouter();
 
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -374,6 +377,16 @@ export function TransactionsView({
           </button>
         </div>
       </header>
+
+      {/* Top merchants chart */}
+      {transactions.length > 0 && (
+        <Card>
+          <TopMerchants
+            transactions={transactions as unknown as Parameters<typeof TopMerchants>[0]["transactions"]}
+            limit={10}
+          />
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>

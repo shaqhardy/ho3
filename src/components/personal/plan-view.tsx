@@ -22,6 +22,7 @@ import {
 import { WhatIfBadge, WhatIfPanel } from "@/components/whatif-view";
 import { AlertTriangle, CheckCircle, ArrowDown, ArrowUp } from "lucide-react";
 import type { BudgetPlanContext } from "@/lib/budgets/plan-integration";
+import { CashflowProjectionChart } from "@/components/charts/cashflow-projection";
 
 interface Props {
   accounts: Account[];
@@ -380,6 +381,21 @@ export function PlanView({
               {formatCurrency(endBalance)}
             </p>
           </div>
+        </Card>
+      )}
+
+      {/* Projected cash line — 30 day forward look */}
+      {projection.timeline.length > 0 && (
+        <Card>
+          <CashflowProjectionChart
+            points={projection.timeline.map((e) => ({
+              date: e.date,
+              label: formatShortDate(e.date),
+              balance: e.balanceAfter,
+              net: (e.income.reduce((s, i) => s + i.amount, 0) -
+                e.expenses.reduce((s, i) => s + i.amount, 0)),
+            }))}
+          />
         </Card>
       )}
 

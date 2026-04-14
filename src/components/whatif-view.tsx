@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, ElevatedCard } from "@/components/ui/card";
 import { formatCurrency, formatShortDate } from "@/lib/format";
+import { BOOK_LABELS } from "@/lib/books";
 import {
   computeProjection,
   compareProjections,
@@ -45,7 +46,7 @@ interface Toast {
 
 interface WhatIfViewProps {
   book: WhatIfBook;
-  bookLabel: string;
+  bookLabel?: string;
   currentCash: number;
   bills: Bill[];
   subscriptions: Subscription[];
@@ -119,7 +120,7 @@ function emptyForm(type: ScenarioType = "expense"): NewScenarioForm {
  */
 export function WhatIfView({
   book,
-  bookLabel,
+  bookLabel: bookLabelProp,
   currentCash,
   bills,
   subscriptions,
@@ -128,6 +129,9 @@ export function WhatIfView({
   categories,
   accounts,
 }: WhatIfViewProps) {
+  const bookLabel =
+    bookLabelProp ??
+    (book === "cross-book" ? "Overview" : BOOK_LABELS[book]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);

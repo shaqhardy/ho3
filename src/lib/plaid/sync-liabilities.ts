@@ -214,6 +214,29 @@ async function fireDebtMilestoneIfNeeded(
   }
 }
 
+/**
+ * Find-or-update dance. The debts table has a partial unique index on
+ * account_id (WHERE account_id IS NOT NULL), which Postgres refuses to accept
+ * in a plain ON CONFLICT(account_id) clause. Rather than switch the index,
+ * we explicitly check + update or insert.
+ */
+async function upsertDebtByAccount(
+  admin: SupabaseClient,
+  accountId: string,
+  payload: Record<string, unknown>
+) {
+  const { data: existing } = await admin
+    .from("debts")
+    .select("id")
+    .eq("account_id", accountId)
+    .maybeSingle();
+  if (existing) {
+    await admin.from("debts").update(payload).eq("id", existing.id);
+  } else {
+    await admin.from("debts").insert(payload);
+  }
+}
+
 export async function syncLiabilities(
   adminSupabase: SupabaseClient,
   plaidItems: {
@@ -307,23 +330,20 @@ export async function syncLiabilities(
       const minPayment = card.minimum_payment_amount || 0;
       const payoff = calculatePayoff(balance, apr, minPayment);
 
-      await adminSupabase.from("debts").upsert(
-        {
-          account_id: account.id,
-          book: account.book,
-          creditor: account.name,
-          current_balance: balance,
-          apr,
-          minimum_payment: minPayment,
-          statement_due_date:
-            card.next_payment_due_date ||
-            new Date().toISOString().split("T")[0],
-          projected_payoff_months: payoff.months,
-          projected_total_interest: payoff.totalInterest,
-          last_synced_at: new Date().toISOString(),
-        },
-        { onConflict: "account_id" }
-      );
+      await upsertDebtByAccount(adminSupabase, account.id, {
+        account_id: account.id,
+        book: account.book,
+        creditor: account.name,
+        current_balance: balance,
+        apr,
+        minimum_payment: minPayment,
+        statement_due_date:
+          card.next_payment_due_date ||
+          new Date().toISOString().split("T")[0],
+        projected_payoff_months: payoff.months,
+        projected_total_interest: payoff.totalInterest,
+        last_synced_at: new Date().toISOString(),
+      });
 
       synced++;
     }
@@ -346,23 +366,20 @@ export async function syncLiabilities(
       const minPayment = loan.minimum_payment_amount || 0;
       const payoff = calculatePayoff(balance, apr, minPayment);
 
-      await adminSupabase.from("debts").upsert(
-        {
-          account_id: account.id,
-          book: account.book,
-          creditor: loan.servicer_address?.organization || account.name,
-          current_balance: balance,
-          apr,
-          minimum_payment: minPayment,
-          statement_due_date:
-            loan.next_payment_due_date ||
-            new Date().toISOString().split("T")[0],
-          projected_payoff_months: payoff.months,
-          projected_total_interest: payoff.totalInterest,
-          last_synced_at: new Date().toISOString(),
-        },
-        { onConflict: "account_id" }
-      );
+      await upsertDebtByAccount(adminSupabase, account.id, {
+        account_id: account.id,
+        book: account.book,
+        creditor: loan.servicer_address?.organization || account.name,
+        current_balance: balance,
+        apr,
+        minimum_payment: minPayment,
+        statement_due_date:
+          loan.next_payment_due_date ||
+          new Date().toISOString().split("T")[0],
+        projected_payoff_months: payoff.months,
+        projected_total_interest: payoff.totalInterest,
+        last_synced_at: new Date().toISOString(),
+      });
 
       synced++;
     }
@@ -382,23 +399,20 @@ export async function syncLiabilities(
       const minPayment = mortgage.next_monthly_payment || 0;
       const payoff = calculatePayoff(balance, apr, minPayment);
 
-      await adminSupabase.from("debts").upsert(
-        {
-          account_id: account.id,
-          book: account.book,
-          creditor: mortgage.servicer_address?.organization || account.name,
-          current_balance: balance,
-          apr,
-          minimum_payment: minPayment,
-          statement_due_date:
-            mortgage.next_payment_due_date ||
-            new Date().toISOString().split("T")[0],
-          projected_payoff_months: payoff.months,
-          projected_total_interest: payoff.totalInterest,
-          last_synced_at: new Date().toISOString(),
-        },
-        { onConflict: "account_id" }
-      );
+      await upsertDebtByAccount(adminSupabase, account.id, {
+        account_id: account.id,
+        book: account.book,
+        creditor: mortgage.servicer_address?.organization || account.name,
+        current_balance: balance,
+        apr,
+        minimum_payment: minPayment,
+        statement_due_date:
+          mortgage.next_payment_due_date ||
+          new Date().toISOString().split("T")[0],
+        projected_payoff_months: payoff.months,
+        projected_total_interest: payoff.totalInterest,
+        last_synced_at: new Date().toISOString(),
+      });
 
       synced++;
     }

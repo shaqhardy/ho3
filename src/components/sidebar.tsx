@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BOOK_LABELS } from "@/lib/books";
 
 const allNavItems = [
   {
@@ -27,19 +28,19 @@ const allNavItems = [
   },
   {
     href: "/personal",
-    label: "Personal",
+    label: BOOK_LABELS.personal,
     icon: Wallet,
     book: "personal" as const,
   },
   {
     href: "/business",
-    label: "Business",
+    label: BOOK_LABELS.business,
     icon: Building2,
     book: "business" as const,
   },
   {
     href: "/nonprofit",
-    label: "Nonprofit",
+    label: BOOK_LABELS.nonprofit,
     icon: Heart,
     book: "nonprofit" as const,
   },
@@ -161,10 +162,10 @@ export function Sidebar({ profile }: { profile: Profile }) {
             { href: `${base}/transactions`, label: "Transactions" },
             { href: `${base}/categorize`, label: "Categorize" },
             { href: `${base}/bills`, label: "Bills" },
+            { href: `${base}/budgets`, label: "Budgets" },
           ];
           if (b === "personal") {
             subItems.push(
-              { href: `${base}/budgets`, label: "Budgets" },
               { href: `${base}/goals`, label: "Goals" },
               { href: `${base}/debts`, label: "Debts" },
               { href: `${base}/plan`, label: "Plan" }

@@ -30,7 +30,7 @@ export default async function PersonalPage() {
       .select("*, categories(name)")
       .eq("book", "personal")
       .order("date", { ascending: false })
-      .limit(100),
+      .limit(5000),
     supabase
       .from("bills")
       .select("*")

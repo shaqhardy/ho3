@@ -13,6 +13,7 @@ import {
   TrendingDown,
   CreditCard,
 } from "lucide-react";
+import { DebtPayoffChart } from "@/components/charts/debt-payoff";
 
 function calculatePayoff(
   balance: number,
@@ -187,6 +188,14 @@ export function DebtModule({
           color="text-muted"
         />
       </div>
+
+      {debts.length > 0 && (
+        <Card>
+          <DebtPayoffChart
+            debts={debts as Parameters<typeof DebtPayoffChart>[0]["debts"]}
+          />
+        </Card>
+      )}
 
       {showForm && (
         <Card>

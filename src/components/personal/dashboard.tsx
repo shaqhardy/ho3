@@ -20,6 +20,8 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { EmptyState } from "@/components/empty-state";
 import Link from "next/link";
 import { Beaker } from "lucide-react";
+import { CategoryDonut } from "@/components/charts/category-donut";
+import { IncomeVsExpenses } from "@/components/charts/income-vs-expenses";
 
 interface Props {
   accounts: Account[];
@@ -200,36 +202,60 @@ export function PersonalDashboard({
         </div>
       </ElevatedCard>
 
-      {/* Stat row */}
+      {/* Stat row — every card links to its detail page. */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="label-sm">Monthly Commitments</h2>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label="Monthly Bills"
-            value={formatCurrency(totalMonthlyBills)}
-            subtext={`${upcomingBills.length} upcoming`}
-            color="text-foreground"
-            accent="terracotta"
-          />
-          <StatCard
-            label="Subscriptions"
-            value={formatCurrency(totalMonthlySubscriptions)}
-            color="text-warning"
-            accent="warning"
-          />
-          <StatCard
-            label="Debt Payments"
-            value={formatCurrency(totalMonthlyDebt)}
-            color="text-deficit"
-            accent="deficit"
-          />
-          <StatCard
-            label="Upcoming Bills"
-            value={String(upcomingBills.length)}
-            subtext="due this month"
-          />
+          <Link
+            href="/personal/bills"
+            className="group transition-transform active:scale-[0.98]"
+          >
+            <StatCard
+              label="Monthly Bills"
+              value={formatCurrency(totalMonthlyBills)}
+              subtext={`${upcomingBills.length} upcoming`}
+              color="text-foreground"
+              accent="terracotta"
+              className="h-full group-hover:bg-card-hover"
+            />
+          </Link>
+          <Link
+            href="/personal/bills?filter=subscriptions"
+            className="group transition-transform active:scale-[0.98]"
+          >
+            <StatCard
+              label="Subscriptions"
+              value={formatCurrency(totalMonthlySubscriptions)}
+              color="text-warning"
+              accent="warning"
+              className="h-full group-hover:bg-card-hover"
+            />
+          </Link>
+          <Link
+            href="/personal/debts"
+            className="group transition-transform active:scale-[0.98]"
+          >
+            <StatCard
+              label="Debt Payments"
+              value={formatCurrency(totalMonthlyDebt)}
+              color="text-deficit"
+              accent="deficit"
+              className="h-full group-hover:bg-card-hover"
+            />
+          </Link>
+          <Link
+            href="/personal/bills?filter=upcoming"
+            className="group transition-transform active:scale-[0.98]"
+          >
+            <StatCard
+              label="Upcoming Bills"
+              value={String(upcomingBills.length)}
+              subtext="due this month"
+              className="h-full group-hover:bg-card-hover"
+            />
+          </Link>
         </div>
       </section>
 
@@ -303,6 +329,29 @@ export function PersonalDashboard({
               </div>
             </Card>
           </Link>
+        </div>
+      </section>
+
+      {/* Charts */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="label-sm">Insights</h2>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CategoryDonut
+              transactions={transactions as Parameters<typeof CategoryDonut>[0]["transactions"]}
+              drilldownHrefFor={(name) =>
+                `/personal/transactions?category=${encodeURIComponent(name)}`
+              }
+            />
+          </Card>
+          <Card>
+            <IncomeVsExpenses
+              transactions={transactions as Parameters<typeof IncomeVsExpenses>[0]["transactions"]}
+              months={6}
+            />
+          </Card>
         </div>
       </section>
 

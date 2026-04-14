@@ -24,13 +24,14 @@ import type {
   CategoryLite,
 } from "@/lib/bills/load";
 import type { Book } from "@/lib/types";
+import { BOOK_LABELS } from "@/lib/books";
 
 type Lifecycle = BillRow["lifecycle"];
 type Tier = BillRow["priority_tier"];
 
 interface Props {
   book: Book;
-  bookLabel: string;
+  bookLabel?: string;
   bills: BillRow[];
   payments: BillPaymentRow[];
   accounts: AcctLite[];
@@ -48,12 +49,13 @@ const TIER_META: Record<
 
 export function BillsView({
   book,
-  bookLabel,
+  bookLabel: bookLabelProp,
   bills,
   payments,
   accounts,
   categories,
 }: Props) {
+  const bookLabel = bookLabelProp ?? BOOK_LABELS[book];
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BillRow | null>(null);

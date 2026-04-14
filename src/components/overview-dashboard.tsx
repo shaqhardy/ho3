@@ -25,6 +25,9 @@ import {
   Beaker,
 } from "lucide-react";
 import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
+import { BOOK_LABELS } from "@/lib/books";
+import { NetWorthTrend } from "@/components/charts/net-worth-trend";
+import { CategoryDonut } from "@/components/charts/category-donut";
 import {
   netWorth as computeNetWorth,
   totalAssets as computeTotalAssets,
@@ -46,7 +49,7 @@ const bookConfig: Record<
   }
 > = {
   personal: {
-    label: "Personal",
+    label: BOOK_LABELS.personal,
     icon: Wallet,
     href: "/personal",
     accent: "terracotta",
@@ -54,7 +57,7 @@ const bookConfig: Record<
     accentText: "text-terracotta",
   },
   business: {
-    label: "Business",
+    label: BOOK_LABELS.business,
     icon: Building2,
     href: "/business",
     accent: "blue",
@@ -62,7 +65,7 @@ const bookConfig: Record<
     accentText: "text-accent-blue",
   },
   nonprofit: {
-    label: "Nonprofit",
+    label: BOOK_LABELS.nonprofit,
     icon: Heart,
     href: "/nonprofit",
     accent: "green",
@@ -71,12 +74,23 @@ const bookConfig: Record<
   },
 };
 
+export interface OverviewTrendsTxn {
+  id: string;
+  book: Book;
+  date: string;
+  amount: number | string;
+  is_income: boolean;
+  account_id: string | null;
+  split_parent_id: string | null;
+}
+
 interface Props {
   accounts: Account[];
   bills: Bill[];
   subscriptions: Subscription[];
   debts: Debt[];
   recentTransactions: Transaction[];
+  trendsTxns?: OverviewTrendsTxn[];
 }
 
 export function OverviewDashboard({
@@ -85,6 +99,7 @@ export function OverviewDashboard({
   subscriptions,
   debts,
   recentTransactions,
+  trendsTxns = [],
 }: Props) {
   // Fully empty state: no accounts and no transactions (owned by Agent E)
   if (accounts.length === 0 && recentTransactions.length === 0) {
@@ -108,9 +123,9 @@ export function OverviewDashboard({
               className="grid grid-cols-1 gap-3 sm:grid-cols-3 opacity-50 pointer-events-none select-none"
             >
               {[
-                { label: "Personal", value: "$12,480", icon: Wallet },
-                { label: "Business", value: "$48,120", icon: Building2 },
-                { label: "Nonprofit", value: "$6,340", icon: Heart },
+                { label: BOOK_LABELS.personal, value: "$12,480", icon: Wallet },
+                { label: BOOK_LABELS.business, value: "$48,120", icon: Building2 },
+                { label: BOOK_LABELS.nonprofit, value: "$6,340", icon: Heart },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
@@ -390,6 +405,32 @@ export function OverviewDashboard({
           })}
         </div>
       </section>
+
+      {/* Cross-book charts */}
+      {trendsTxns.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="label-sm">Insights</h2>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <NetWorthTrend
+                accounts={accounts as Parameters<typeof NetWorthTrend>[0]["accounts"]}
+                transactions={trendsTxns as Parameters<typeof NetWorthTrend>[0]["transactions"]}
+                months={12}
+              />
+            </Card>
+            <Card>
+              <CategoryDonut
+                transactions={(trendsTxns.map((t) => ({
+                  ...t,
+                  categories: null,
+                })) as unknown) as Parameters<typeof CategoryDonut>[0]["transactions"]}
+              />
+            </Card>
+          </div>
+        </section>
+      )}
 
       {/* Upcoming in next 14 days */}
       {upcoming14.length > 0 && (

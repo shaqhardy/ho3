@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import { BOOK_LABELS } from "@/lib/books";
 
 type Book = "personal" | "business" | "nonprofit";
 
@@ -821,21 +822,21 @@ export function SettingsView({
                     </p>
                     <div className="space-y-3">
                       <ThresholdField
-                        label="Personal"
+                        label={BOOK_LABELS.personal}
                         value={prefs.large_txn_threshold_personal}
                         onCommit={(n) =>
                           updatePref("large_txn_threshold_personal", n)
                         }
                       />
                       <ThresholdField
-                        label="Business"
+                        label={BOOK_LABELS.business}
                         value={prefs.large_txn_threshold_business}
                         onCommit={(n) =>
                           updatePref("large_txn_threshold_business", n)
                         }
                       />
                       <ThresholdField
-                        label="Nonprofit"
+                        label={BOOK_LABELS.nonprofit}
                         value={prefs.large_txn_threshold_nonprofit}
                         onCommit={(n) =>
                           updatePref("large_txn_threshold_nonprofit", n)

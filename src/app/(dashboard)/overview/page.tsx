@@ -48,6 +48,16 @@ export default async function OverviewPage() {
       .limit(20),
   ]);
 
+  // Wider transaction window for charts (last 13 months of end-of-month
+  // snapshots). Kept separate from recentTransactions so the table sections
+  // stay lean.
+  const trendsSince = new Date();
+  trendsSince.setMonth(trendsSince.getMonth() - 13);
+  const { data: trendsTxns } = await supabase
+    .from("transactions")
+    .select("id, book, date, amount, is_income, account_id, split_parent_id")
+    .gte("date", trendsSince.toISOString().slice(0, 10));
+
   return (
     <OverviewDashboard
       accounts={accounts || []}
@@ -55,6 +65,7 @@ export default async function OverviewPage() {
       subscriptions={subscriptions || []}
       debts={debts || []}
       recentTransactions={recentTransactions || []}
+      trendsTxns={(trendsTxns || []) as unknown as Parameters<typeof OverviewDashboard>[0]["trendsTxns"]}
     />
   );
 }

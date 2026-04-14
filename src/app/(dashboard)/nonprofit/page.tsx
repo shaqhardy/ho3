@@ -20,6 +20,7 @@ export default async function NonprofitPage() {
       .from("accounts")
       .select("*")
       .eq("book", "nonprofit")
+      .eq("is_hidden", false)
       .order("name"),
     supabase
       .from("transactions")

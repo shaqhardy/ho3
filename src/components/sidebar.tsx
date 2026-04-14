@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Settings,
+  Landmark,
 } from "lucide-react";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -177,7 +178,23 @@ export function Sidebar({ profile }: { profile: Profile }) {
           </div>
         )}
 
-        {/* Settings link */}
+        {/* Accounts + Settings */}
+        {profile.role === "admin" && (
+          <div className="px-3 pb-1">
+            <Link
+              href="/accounts"
+              onClick={() => setOpen(false)}
+              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                pathname.startsWith("/accounts")
+                  ? "bg-terracotta/10 text-terracotta"
+                  : "text-muted hover:bg-card-hover hover:text-foreground"
+              }`}
+            >
+              <Landmark className="h-5 w-5" />
+              Accounts
+            </Link>
+          </div>
+        )}
         <div className="px-3 pb-2">
           <Link
             href="/settings"

@@ -23,6 +23,7 @@ export default async function PersonalPage() {
       .from("accounts")
       .select("*")
       .eq("book", "personal")
+      .eq("is_hidden", false)
       .order("name"),
     supabase
       .from("transactions")

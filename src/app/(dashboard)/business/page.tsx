@@ -20,6 +20,7 @@ export default async function BusinessPage() {
       .from("accounts")
       .select("*")
       .eq("book", "business")
+      .eq("is_hidden", false)
       .order("name"),
     supabase
       .from("transactions")

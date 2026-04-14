@@ -27,7 +27,7 @@ export default async function OverviewPage() {
     { data: debts },
     { data: recentTransactions },
   ] = await Promise.all([
-    supabase.from("accounts").select("*").order("book"),
+    supabase.from("accounts").select("*").eq("is_hidden", false).order("book"),
     supabase
       .from("bills")
       .select("*")

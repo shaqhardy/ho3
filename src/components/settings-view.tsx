@@ -499,6 +499,27 @@ export function SettingsView({
             <ArrowRight className="h-4 w-4 text-muted" />
           </Link>
         )}
+        {profile?.role === "admin" && (
+          <Link
+            href="/accounts"
+            className="mt-3 flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-card-hover transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-terracotta/10">
+                <Shield className="h-4 w-4 text-terracotta" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Bank &amp; Account Management
+                </p>
+                <p className="text-xs text-muted">
+                  Connect, disconnect, rename, reassign between books
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted" />
+          </Link>
+        )}
       </section>
 
       {/* Notifications */}

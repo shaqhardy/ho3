@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     .in("id", body.ids);
 
   let rulesCreated = 0;
+  let retroactive_updated = 0;
   if (body.create_rules && body.category_id) {
     // Group by (book, merchant) so we write one rule per distinct merchant in
     // the selection, not one rule per transaction.
@@ -87,8 +88,18 @@ export async function POST(request: NextRequest) {
           merchant_pattern: merchant,
           category_id: body.category_id,
         });
+        rulesCreated++;
       }
-      rulesCreated++;
+
+      // Retroactive: sweep any still-uncategorized transactions for this
+      // merchant+book that weren't in the explicit selection.
+      const { count: swept } = await admin
+        .from("transactions")
+        .update({ category_id: body.category_id }, { count: "exact" })
+        .eq("book", book)
+        .eq("merchant", merchant)
+        .is("category_id", null);
+      retroactive_updated += swept ?? 0;
     }
   }
 
@@ -96,5 +107,6 @@ export async function POST(request: NextRequest) {
     success: true,
     updated: rows.length,
     rules_created: rulesCreated,
+    retroactive_updated,
   });
 }

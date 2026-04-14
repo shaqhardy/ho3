@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PlanView } from "@/components/personal/plan-view";
 import type { Scenario } from "@/lib/projection/engine";
+import { getBudgetContextForPlan } from "@/lib/budgets/plan-integration";
+import type { Transaction, Budget, BudgetCategory, Category } from "@/lib/types";
 
 export default async function PlanPage() {
   const supabase = await createClient();
@@ -53,6 +55,39 @@ export default async function PlanPage() {
 
   const scenarios = (scenariosRes?.data ?? []) as Scenario[];
 
+  // Budget overage context: if the user is over 110% on a discretionary
+  // category, the Plan view can highlight that so money decisions deprioritize
+  // it. Quiet no-op when no active budget exists.
+  const [{ data: activeBudgets }, { data: budgetTxns }, { data: allCats }] =
+    await Promise.all([
+      supabase
+        .from("budgets")
+        .select("*, budget_categories(*)")
+        .eq("book", "personal")
+        .eq("is_active", true),
+      supabase
+        .from("transactions")
+        .select(
+          "id, account_id, book, date, amount, merchant, description, category_id, is_income, plaid_transaction_id, created_at, notes, receipt_url"
+        )
+        .eq("book", "personal")
+        .eq("is_income", false)
+        .gte(
+          "date",
+          new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)
+            .toISOString()
+            .split("T")[0]
+        ),
+      supabase.from("categories").select("id, name").eq("book", "personal"),
+    ]);
+  const budgetContext = getBudgetContextForPlan(
+    (activeBudgets || []) as unknown as Array<
+      Budget & { budget_categories?: BudgetCategory[] }
+    >,
+    (budgetTxns || []) as unknown as Transaction[],
+    (allCats || []) as Pick<Category, "id" | "name">[]
+  );
+
   return (
     <PlanView
       accounts={accounts || []}
@@ -63,6 +98,7 @@ export default async function PlanPage() {
       planOverrides={planOverrides || []}
       userId={user.id}
       scenarios={scenarios}
+      budgetContext={budgetContext}
     />
   );
 }

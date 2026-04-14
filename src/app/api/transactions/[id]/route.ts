@@ -79,7 +79,10 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 400 });
 
   // Auto-rule: remember this merchant→category mapping so future imports with
-  // the same merchant inherit the user's choice.
+  // the same merchant inherit the user's choice. Also retroactively apply the
+  // new category to existing uncategorized transactions from the same
+  // merchant — only uncategorized ones, so we never clobber a manual choice.
+  let retroactive_updated = 0;
   if (
     body.create_rule &&
     "category_id" in body &&
@@ -104,9 +107,18 @@ export async function PATCH(
         category_id: body.category_id,
       });
     }
+
+    const { count } = await admin
+      .from("transactions")
+      .update({ category_id: body.category_id }, { count: "exact" })
+      .eq("book", existing.book)
+      .eq("merchant", existing.merchant)
+      .is("category_id", null)
+      .neq("id", id);
+    retroactive_updated = count ?? 0;
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, retroactive_updated });
 }
 
 export async function DELETE(

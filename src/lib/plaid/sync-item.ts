@@ -14,6 +14,8 @@ type PlaidItemRow = {
   cursor: string | null;
 };
 
+type PFC = { primary?: string | null; detailed?: string | null };
+
 type TxnSyncResponse = {
   added?: Array<{
     transaction_id: string;
@@ -22,6 +24,7 @@ type TxnSyncResponse = {
     amount: number;
     name?: string;
     merchant_name?: string | null;
+    personal_finance_category?: PFC | null;
   }>;
   modified?: Array<{
     transaction_id: string;
@@ -29,6 +32,7 @@ type TxnSyncResponse = {
     name?: string;
     merchant_name?: string | null;
     date: string;
+    personal_finance_category?: PFC | null;
   }>;
   removed?: Array<{ transaction_id: string }>;
   next_cursor?: string;
@@ -122,6 +126,8 @@ export async function syncPlaidItemNow(
             merchant: t.merchant_name || t.name || null,
             description: t.name || null,
             is_income: isIncome,
+            pfc_primary: t.personal_finance_category?.primary ?? null,
+            pfc_detailed: t.personal_finance_category?.detailed ?? null,
           },
           { onConflict: "plaid_transaction_id" }
         )
@@ -155,6 +161,8 @@ export async function syncPlaidItemNow(
           description: t.name || null,
           date: t.date,
           is_income: t.amount < 0,
+          pfc_primary: t.personal_finance_category?.primary ?? null,
+          pfc_detailed: t.personal_finance_category?.detailed ?? null,
         })
         .eq("plaid_transaction_id", t.transaction_id);
       modified++;

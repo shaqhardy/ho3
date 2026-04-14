@@ -21,6 +21,7 @@ import {
 } from "@/lib/projection/engine";
 import { WhatIfBadge, WhatIfPanel } from "@/components/whatif-view";
 import { AlertTriangle, CheckCircle, ArrowDown, ArrowUp } from "lucide-react";
+import type { BudgetPlanContext } from "@/lib/budgets/plan-integration";
 
 interface Props {
   accounts: Account[];
@@ -31,6 +32,7 @@ interface Props {
   planOverrides: PlanOverride[];
   userId: string;
   scenarios?: Scenario[];
+  budgetContext?: BudgetPlanContext;
 }
 
 const STORAGE_KEY = "ho3-plan-include-whatif";
@@ -44,6 +46,7 @@ export function PlanView({
   planOverrides,
   userId,
   scenarios: initialScenarios,
+  budgetContext,
 }: Props) {
   const router = useRouter();
   const [localOverrides, setLocalOverrides] = useState<
@@ -257,6 +260,48 @@ export function PlanView({
         <h1 className="text-2xl font-bold text-foreground">The Plan</h1>
         <p className="text-xs text-muted">Next 30 days</p>
       </div>
+
+      {/* Budget overages from active budgets — surfaced so the Plan view can
+          deprioritize discretionary spend in categories that are already
+          blown through. */}
+      {budgetContext &&
+        (budgetContext.overLimitCategories.length > 0 ||
+          budgetContext.nearLimitCategories.length > 0) && (
+          <Card accent="warning">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium">Budget alerts this period</p>
+                {budgetContext.overLimitCategories.length > 0 && (
+                  <p className="mt-1 text-xs">
+                    <span className="text-deficit font-medium">
+                      Over budget:
+                    </span>{" "}
+                    {budgetContext.overLimitCategories
+                      .map(
+                        (c) =>
+                          `${c.name} ${Math.round(c.percent)}% ($${c.overage.toFixed(0)} over)`
+                      )
+                      .join(" · ")}
+                  </p>
+                )}
+                {budgetContext.nearLimitCategories.length > 0 && (
+                  <p className="mt-1 text-xs">
+                    <span className="text-warning font-medium">
+                      Near limit:
+                    </span>{" "}
+                    {budgetContext.nearLimitCategories
+                      .map((c) => `${c.name} ${Math.round(c.percent)}%`)
+                      .join(" · ")}
+                  </p>
+                )}
+                <p className="mt-1 text-[10px] text-muted">
+                  Discretionary spend in these categories is deprioritized.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
       {/* What If toggle */}
       <WhatIfPanel

@@ -8,6 +8,7 @@ import {
   buildGoalHitPush,
 } from "@/lib/push/notifications";
 import { currentPeriodRange } from "@/lib/budgets/compute";
+import { generateTuneUpSuggestions } from "@/lib/budgets/suggestions";
 import type { Book } from "@/lib/types";
 
 // Ensure this runs on Node.js (web-push uses node crypto).
@@ -602,5 +603,17 @@ async function handle(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ processed });
+  // End-of-period budget tune-up suggestions. Idempotent: unique constraint on
+  // (budget_category_id, period_key) means daily runs don't duplicate rows.
+  let tune_up: { budgets_checked: number; suggestions_created: number } = {
+    budgets_checked: 0,
+    suggestions_created: 0,
+  };
+  try {
+    tune_up = await generateTuneUpSuggestions(supabase);
+  } catch (err) {
+    console.error("[cron daily] tune-up generation failed", err);
+  }
+
+  return NextResponse.json({ processed, tune_up });
 }

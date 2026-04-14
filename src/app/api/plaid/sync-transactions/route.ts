@@ -261,6 +261,10 @@ export async function POST() {
               description: txn.name,
               category_id: categoryId,
               is_income: isIncome,
+              pfc_primary:
+                txn.personal_finance_category?.primary ?? null,
+              pfc_detailed:
+                txn.personal_finance_category?.detailed ?? null,
             },
             { onConflict: "plaid_transaction_id" }
           )

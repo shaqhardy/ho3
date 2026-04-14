@@ -1,7 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BudgetsList } from "@/components/budgets/budgets-list";
 import { currentPeriodRange } from "@/lib/budgets/compute";
+
+export const dynamic = "force-dynamic";
 
 export default async function BudgetsPage() {
   const supabase = await createClient();
@@ -10,7 +12,9 @@ export default async function BudgetsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: budgets }, { data: categories }, { data: transactions }] =
+  const admin = await createServiceClient();
+
+  const [{ data: budgets }, { data: categories }, { data: transactions }, { data: suggestions }] =
     await Promise.all([
       supabase
         .from("budgets")
@@ -34,6 +38,11 @@ export default async function BudgetsPage() {
             .toISOString()
             .split("T")[0]
         ),
+      admin
+        .from("budget_suggestions")
+        .select("*, budget_categories:budget_category_id(category_id, categories(name))")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
 
   // Compute current-period spent per budget
@@ -76,6 +85,7 @@ export default async function BudgetsPage() {
         budgets={budgetsWithSummary}
         categories={categories || []}
         book="personal"
+        suggestions={(suggestions || []) as unknown as Parameters<typeof BudgetsList>[0]["suggestions"]}
       />
     </div>
   );

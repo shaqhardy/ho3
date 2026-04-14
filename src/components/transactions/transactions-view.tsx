@@ -45,6 +45,11 @@ interface Props {
   categories: CatRow[];
   accounts: AcctRow[];
   bills: BillRow[];
+  completeness: {
+    pct_of_expenses: number;
+    expense_uncategorized: number;
+    expense_total: number;
+  };
 }
 
 const DATE_PRESETS = [
@@ -62,6 +67,7 @@ export function TransactionsView({
   categories,
   accounts,
   bills,
+  completeness,
 }: Props) {
   const router = useRouter();
 
@@ -333,7 +339,29 @@ export function TransactionsView({
             Transactions
           </h1>
           <p className="text-xs text-muted">
-            {transactions.length} total · showing {filtered.length}
+            {transactions.length} total · showing {filtered.length} ·{" "}
+            <span
+              className={
+                completeness.pct_of_expenses >= 95
+                  ? "text-surplus"
+                  : completeness.pct_of_expenses >= 75
+                    ? "text-warning"
+                    : "text-deficit"
+              }
+            >
+              {completeness.pct_of_expenses}% categorized
+            </span>
+            {completeness.expense_uncategorized > 0 && (
+              <>
+                {" · "}
+                <a
+                  href={`/${book}/categorize`}
+                  className="text-terracotta hover:underline"
+                >
+                  {completeness.expense_uncategorized} to clean up →
+                </a>
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">

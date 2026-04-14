@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { categorizationCompleteness } from "@/lib/transactions/completeness";
 import type { Book } from "@/lib/types";
 
 export interface LoadedTxnData {
@@ -6,6 +7,11 @@ export interface LoadedTxnData {
   categories: CatRow[];
   accounts: AcctRow[];
   bills: BillRow[];
+  completeness: {
+    pct_of_expenses: number;
+    expense_uncategorized: number;
+    expense_total: number;
+  };
 }
 
 export interface TxnRow {
@@ -93,10 +99,18 @@ export async function loadTransactionsData(
       supabase.from("bills").select("id, name, book").eq("book", book),
     ]);
 
+  const admin = await createServiceClient();
+  const stat = await categorizationCompleteness(admin, book);
+
   return {
     transactions: (txns ?? []) as unknown as TxnRow[],
     categories: (categories ?? []) as CatRow[],
     accounts: (accounts ?? []) as AcctRow[],
     bills: (bills ?? []) as BillRow[],
+    completeness: {
+      pct_of_expenses: stat.pct_of_expenses,
+      expense_uncategorized: stat.expense_uncategorized,
+      expense_total: stat.expense_total,
+    },
   };
 }

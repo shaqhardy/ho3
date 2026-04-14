@@ -159,6 +159,7 @@ export function Sidebar({ profile }: { profile: Profile }) {
           const base = `/${b}`;
           const subItems: { href: string; label: string }[] = [
             { href: `${base}/transactions`, label: "Transactions" },
+            { href: `${base}/categorize`, label: "Categorize" },
             { href: `${base}/bills`, label: "Bills" },
           ];
           if (b === "personal") {

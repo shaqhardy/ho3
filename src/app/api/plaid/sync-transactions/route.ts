@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
+import { autoMatchBillForTransaction } from "@/lib/bills/auto-match";
 import { sendPushToUser } from "@/lib/push/send";
 import {
   buildLargeTxnPush,
@@ -363,44 +364,22 @@ export async function POST() {
           }
         }
 
-        // Bill-paid fuzzy match (only for outflows).
-        if (!isIncome && accountId) {
-          const txnDate = txn.date as string;
-          const threeBack = addDaysYmd(txnDate, -3);
-          const threeAhead = addDaysYmd(txnDate, 3);
-
-          const { data: candidateBills } = await adminSupabase
-            .from("bills")
-            .select("id, name, amount, due_date, status, book, account_id")
-            .eq("book", book)
-            .eq("status", "upcoming")
-            .gte("due_date", threeBack)
-            .lte("due_date", threeAhead);
-
-          const matches = (candidateBills ?? []).filter((b) => {
-            const billAmt = Number(b.amount);
-            if (billAmt <= 0) return false;
-            const pct = Math.abs(absAmount - billAmt) / billAmt;
-            if (pct > 0.01) return false;
-            if (b.account_id && b.account_id !== accountId) return false;
-            return true;
-          });
-
-          if (matches.length > 0) {
-            // Prefer the closest due_date match.
-            matches.sort(
-              (a, b) =>
-                Math.abs(daysBetween(a.due_date, txnDate)) -
-                Math.abs(daysBetween(b.due_date, txnDate))
-            );
-            const bill = matches[0];
-
-            await adminSupabase
-              .from("bills")
-              .update({ status: "paid" })
-              .eq("id", bill.id);
-
-            // New balance = account balance after Plaid sync. We'll fetch fresh.
+        // Bill-paid auto-match: insert bill_payments, advance recurring due,
+        // fire push notification. Handles variable bills via typical_amount.
+        if (txnId) {
+          const matched = await autoMatchBillForTransaction(
+            adminSupabase,
+            {
+              id: txnId,
+              date: txn.date,
+              amount: absAmount,
+              merchant: txn.merchant_name || txn.name,
+              account_id: accountId,
+            },
+            book,
+            isIncome
+          );
+          if (matched) {
             const { data: afterAcct } = await adminSupabase
               .from("accounts")
               .select("current_balance, available_balance")
@@ -413,25 +392,23 @@ export async function POST() {
                     0
                 )
               : null;
-
-            const period = bill.due_date;
             for (const uid of recipients) {
               const prefs = prefsByUser.get(uid);
               if (prefs?.bill_paid_confirmation === false) continue;
               const payload = buildBillPaidPush(
                 {
-                  id: bill.id,
-                  name: bill.name,
-                  amount: Number(bill.amount),
+                  id: matched.id,
+                  name: matched.name,
+                  amount: matched.amount,
                   book,
                 },
-                txnId ? { id: txnId } : null,
+                { id: txnId },
                 newBalance
               );
               await sendPushToUser(
                 uid,
                 payload,
-                `bill_paid_${bill.id}_${period}`,
+                `bill_paid_${matched.id}_${matched.due_date_period}`,
                 "bill_paid"
               );
             }

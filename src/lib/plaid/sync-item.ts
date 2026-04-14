@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidFetch } from "@/lib/plaid/api";
 import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
+import { autoMatchBillForTransaction } from "@/lib/bills/auto-match";
 
 type Book = "personal" | "business" | "nonprofit";
 
@@ -107,20 +108,42 @@ export async function syncPlaidItemNow(
     for (const t of data.added ?? []) {
       const acct = byPlaidId.get(t.account_id);
       const isIncome = t.amount < 0;
-      await admin.from("transactions").upsert(
-        {
-          plaid_transaction_id: t.transaction_id,
-          account_id: acct?.id ?? null,
-          book: acct?.book ?? "personal",
-          date: t.date,
-          amount: Math.abs(t.amount),
-          merchant: t.merchant_name || t.name || null,
-          description: t.name || null,
-          is_income: isIncome,
-        },
-        { onConflict: "plaid_transaction_id" }
-      );
+      const book = acct?.book ?? "personal";
+      const absAmount = Math.abs(t.amount);
+      const { data: upserted } = await admin
+        .from("transactions")
+        .upsert(
+          {
+            plaid_transaction_id: t.transaction_id,
+            account_id: acct?.id ?? null,
+            book,
+            date: t.date,
+            amount: absAmount,
+            merchant: t.merchant_name || t.name || null,
+            description: t.name || null,
+            is_income: isIncome,
+          },
+          { onConflict: "plaid_transaction_id" }
+        )
+        .select("id")
+        .maybeSingle();
       added++;
+
+      // Auto-match against bills — no push notifications on manual sync path.
+      if (upserted?.id && acct?.id) {
+        await autoMatchBillForTransaction(
+          admin,
+          {
+            id: upserted.id,
+            date: t.date,
+            amount: absAmount,
+            merchant: t.merchant_name || t.name || null,
+            account_id: acct.id,
+          },
+          book,
+          isIncome
+        );
+      }
     }
 
     for (const t of data.modified ?? []) {

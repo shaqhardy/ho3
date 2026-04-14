@@ -150,33 +150,44 @@ export function Sidebar({ profile }: { profile: Profile }) {
           })}
         </nav>
 
-        {/* Sub-nav for personal */}
-        {profile.allowed_books.includes("personal") && (
-          <div className="px-3 pb-2 space-y-0.5">
-            <Link
-              href="/personal/budgets"
-              onClick={() => setOpen(false)}
-              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                pathname.startsWith("/personal/budgets")
-                  ? "bg-terracotta/10 text-terracotta"
-                  : "text-muted hover:bg-card-hover hover:text-foreground"
-              }`}
-            >
-              <span className="ml-8">Budgets</span>
-            </Link>
-            <Link
-              href="/personal/goals"
-              onClick={() => setOpen(false)}
-              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                pathname.startsWith("/personal/goals")
-                  ? "bg-terracotta/10 text-terracotta"
-                  : "text-muted hover:bg-card-hover hover:text-foreground"
-              }`}
-            >
-              <span className="ml-8">Goals</span>
-            </Link>
-          </div>
-        )}
+        {/* Sub-nav: shown for each book the user can access. Transactions and
+            Bills apply to every book; Budgets and Goals are personal-only. */}
+        {(
+          ["personal", "business", "nonprofit"] as const
+        ).filter((b) => profile.allowed_books.includes(b)).map((b) => {
+          if (!pathname.startsWith(`/${b}`)) return null;
+          const base = `/${b}`;
+          const subItems: { href: string; label: string }[] = [
+            { href: `${base}/transactions`, label: "Transactions" },
+            { href: `${base}/bills`, label: "Bills" },
+          ];
+          if (b === "personal") {
+            subItems.push(
+              { href: `${base}/budgets`, label: "Budgets" },
+              { href: `${base}/goals`, label: "Goals" },
+              { href: `${base}/debts`, label: "Debts" },
+              { href: `${base}/plan`, label: "Plan" }
+            );
+          }
+          return (
+            <div key={b} className="px-3 pb-2 space-y-0.5">
+              {subItems.map((s) => (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  onClick={() => setOpen(false)}
+                  className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                    pathname.startsWith(s.href)
+                      ? "bg-terracotta/10 text-terracotta"
+                      : "text-muted hover:bg-card-hover hover:text-foreground"
+                  }`}
+                >
+                  <span className="ml-8">{s.label}</span>
+                </Link>
+              ))}
+            </div>
+          );
+        })}
 
         {/* Accounts + Settings */}
         {profile.role === "admin" && (

@@ -116,6 +116,35 @@ export function PersonalDashboard({
     0
   );
 
+  // Monthly fixed bills — approximate all non-cancelled/paused bills to their
+  // monthly cadence so the KPI reflects the committed obligation, not just
+  // what happens to be due this calendar month.
+  const totalMonthlyBills = bills
+    .filter((b) => {
+      const lc = (b as Bill & { lifecycle?: string }).lifecycle;
+      return !lc || lc === "active";
+    })
+    .reduce((sum, b) => {
+      const bx = b as Bill & {
+        variable?: boolean;
+        typical_amount?: number | string | null;
+      };
+      const base = Number(
+        bx.variable ? bx.typical_amount ?? 0 : b.amount ?? 0
+      );
+      if (!base) return sum;
+      switch (b.frequency) {
+        case "weekly":
+          return sum + base * 4.33;
+        case "quarterly":
+          return sum + base / 3;
+        case "yearly":
+          return sum + base / 12;
+        default:
+          return sum + base;
+      }
+    }, 0);
+
   const upcomingBills = bills.filter((b) => b.status === "upcoming");
 
   const totalDebt = debts.reduce(
@@ -176,7 +205,14 @@ export function PersonalDashboard({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="label-sm">Monthly Commitments</h2>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Monthly Bills"
+            value={formatCurrency(totalMonthlyBills)}
+            subtext={`${upcomingBills.length} upcoming`}
+            color="text-foreground"
+            accent="terracotta"
+          />
           <StatCard
             label="Subscriptions"
             value={formatCurrency(totalMonthlySubscriptions)}

@@ -11,6 +11,11 @@ import { AccountsList } from "@/components/personal/accounts-list";
 import { EmptyState } from "@/components/empty-state";
 import { Plus, RotateCw, Pause, Beaker } from "lucide-react";
 import Link from "next/link";
+import {
+  netWorth as computeNetWorth,
+  totalAssets as computeTotalAssets,
+  totalLiabilities as computeTotalLiabilities,
+} from "@/lib/accounts/money";
 
 interface Props {
   book: Book;
@@ -63,10 +68,10 @@ export function BookDashboard({
     );
   }
 
-  const totalBalance = accounts.reduce(
-    (sum, a) => sum + Number(a.current_balance),
-    0
-  );
+  // Net worth = assets − liabilities for this book.
+  const netWorth = computeNetWorth(accounts);
+  const bookAssets = computeTotalAssets(accounts);
+  const bookLiabilities = computeTotalLiabilities(accounts);
 
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -183,9 +188,26 @@ export function BookDashboard({
                 <ElevatedCard accent={bookAccent}>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <p className="label-sm">Total Balance</p>
-                      <p className="mt-2 hero-value text-foreground">
-                        {formatCurrency(totalBalance)}
+                      <p className="label-sm">Net Worth</p>
+                      <p
+                        className={`mt-2 hero-value ${netWorth >= 0 ? "text-foreground" : "text-deficit"}`}
+                      >
+                        {formatCurrency(netWorth)}
+                      </p>
+                      <p className="mt-2 text-xs text-muted num">
+                        <span className="text-surplus">
+                          {formatCurrency(bookAssets)}
+                        </span>{" "}
+                        assets
+                        {bookLiabilities > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-deficit">
+                              {formatCurrency(bookLiabilities)}
+                            </span>{" "}
+                            owed
+                          </>
+                        )}
                       </p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">

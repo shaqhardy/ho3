@@ -25,6 +25,12 @@ import {
   Beaker,
 } from "lucide-react";
 import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
+import {
+  netWorth as computeNetWorth,
+  totalAssets as computeTotalAssets,
+  totalLiabilities as computeTotalLiabilities,
+  signedNetWorthBalance,
+} from "@/lib/accounts/money";
 
 type BookAccent = "terracotta" | "blue" | "green";
 
@@ -163,25 +169,25 @@ export function OverviewDashboard({
       />
     ) : null;
 
-  // Net worth by book
+  // Net worth by book = assets − liabilities, per book.
+  // Credit/loan accounts contribute negatively; depository/investment contribute positively.
   const bookBalances: Record<Book, number> = {
     personal: 0,
     business: 0,
     nonprofit: 0,
   };
   for (const a of accounts) {
-    bookBalances[a.book] += Number(a.current_balance);
+    bookBalances[a.book] += signedNetWorthBalance(a);
   }
 
-  const totalDebt = debts.reduce(
+  // Hero "owed" uses the accounts table — authoritative for what reduces net worth.
+  const accountLiabilities = computeTotalLiabilities(accounts);
+  // Debt Summary section uses the debts table — it has APR / minimum payment detail.
+  const debtsTableTotal = debts.reduce(
     (sum, d) => sum + Number(d.current_balance),
     0
   );
-  const netWorth =
-    bookBalances.personal +
-    bookBalances.business +
-    bookBalances.nonprofit -
-    totalDebt;
+  const netWorth = computeNetWorth(accounts);
 
   // This month surplus/deficit per book
   const monthStart = new Date();
@@ -203,8 +209,7 @@ export function OverviewDashboard({
     }
   }
 
-  const totalAssets =
-    bookBalances.personal + bookBalances.business + bookBalances.nonprofit;
+  const totalAssets = computeTotalAssets(accounts);
 
   // Upcoming bills + subs in next 14 days
   const upcoming14 = [
@@ -288,13 +293,13 @@ export function OverviewDashboard({
                 {formatCurrency(totalAssets)}
               </span>{" "}
               assets
-              {totalDebt > 0 && (
+              {accountLiabilities > 0 && (
                 <>
                   {" · "}
                   <span className="text-deficit">
-                    {formatCurrency(totalDebt)}
+                    {formatCurrency(accountLiabilities)}
                   </span>{" "}
-                  debt
+                  owed
                 </>
               )}
             </p>
@@ -429,7 +434,7 @@ export function OverviewDashboard({
       )}
 
       {/* Debt summary */}
-      {totalDebt > 0 && (
+      {debtsTableTotal > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="label-sm">Debt Summary</h2>
@@ -444,7 +449,7 @@ export function OverviewDashboard({
             <div className="flex items-center justify-between">
               <p className="label-sm">Total Debt</p>
               <p className="display-value text-deficit">
-                {formatCurrency(totalDebt)}
+                {formatCurrency(debtsTableTotal)}
               </p>
             </div>
             <ul className="mt-4 space-y-1.5">

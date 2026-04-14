@@ -26,6 +26,7 @@ import {
 import { Card, ElevatedCard } from "@/components/ui/card";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { formatCurrency } from "@/lib/format";
+import { isLiability, signedNetWorthBalance } from "@/lib/accounts/money";
 
 type Book = "personal" | "business" | "nonprofit";
 
@@ -407,10 +408,14 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
       )}
 
       {banks.map(({ item, accounts: bankAccounts }) => {
-        const totalBalance = bankAccounts.reduce(
-          (sum, a) => sum + Number(a.current_balance || 0),
+        // Net contribution of the bank (assets here minus liabilities here).
+        const bankNetWorth = bankAccounts.reduce(
+          (sum, a) => sum + signedNetWorthBalance(a),
           0
         );
+        const bankOwed = bankAccounts
+          .filter((a) => isLiability(a.type))
+          .reduce((sum, a) => sum + Number(a.current_balance || 0), 0);
         const pendingDelete = !!item.pending_delete_id;
         const status = pendingDelete
           ? "pending"
@@ -441,7 +446,21 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
                   <p className="text-xs text-muted">
                     {bankAccounts.length} account
                     {bankAccounts.length === 1 ? "" : "s"} •{" "}
-                    {formatCurrency(totalBalance)} total
+                    <span
+                      className={
+                        bankNetWorth < 0 ? "text-deficit" : undefined
+                      }
+                    >
+                      {formatCurrency(bankNetWorth)} net
+                    </span>
+                    {bankOwed > 0 && (
+                      <>
+                        {" • "}
+                        <span className="text-deficit">
+                          {formatCurrency(bankOwed)} owed
+                        </span>
+                      </>
+                    )}
                   </p>
                   <StatusPill status={status} />
                 </div>
@@ -606,6 +625,7 @@ function AccountRowView({
     (b) => allowedBooks.includes(b) || b === acct.book
   );
   const balance = Number(acct.current_balance || 0);
+  const liability = isLiability(acct.type);
   return (
     <div
       className={`flex flex-wrap items-center justify-between gap-3 py-3 ${
@@ -635,7 +655,13 @@ function AccountRowView({
         </div>
         <p className="text-xs text-muted">
           {subtypeLabel(acct)} •{" "}
-          <span className="num">{formatCurrency(balance)}</span>
+          {liability ? (
+            <span className="num text-deficit font-medium">
+              Owed: {formatCurrency(balance)}
+            </span>
+          ) : (
+            <span className="num">{formatCurrency(balance)}</span>
+          )}
           {acct.last_synced_at && (
             <> • synced {timeAgo(acct.last_synced_at)}</>
           )}

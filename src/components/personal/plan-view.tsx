@@ -110,10 +110,15 @@ export function PlanView({
     };
   }, [includeWhatIf, fetchedScenarios, initialScenarios]);
 
-  const currentCash = accounts.reduce(
-    (sum, a) => sum + Number(a.available_balance ?? a.current_balance),
-    0
-  );
+  // Projection starts from spendable cash only. Credit/loan accounts never
+  // contribute to cash-on-hand — the plan/page query already filters to
+  // depository, but we defend here in case a consumer ever passes mixed data.
+  const currentCash = accounts
+    .filter((a) => a.type === "depository")
+    .reduce(
+      (sum, a) => sum + Number(a.available_balance ?? a.current_balance ?? 0),
+      0
+    );
 
   // Project via engine — with or without scenarios
   const projection = useMemo(

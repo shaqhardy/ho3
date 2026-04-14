@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import type { Account } from "@/lib/types";
 import { Landmark, CreditCard, PiggyBank, TrendingUp } from "lucide-react";
+import { isLiability } from "@/lib/accounts/money";
 
 const typeIcons: Record<string, typeof Landmark> = {
   depository: Landmark,
@@ -38,6 +39,7 @@ export function AccountsList({ accounts }: { accounts: Account[] }) {
     <div className="space-y-6">
       {Object.entries(grouped).map(([type, accts]) => {
         const Icon = typeIcons[type] || Landmark;
+        const isLia = isLiability(type);
         const total = accts.reduce(
           (sum, a) => sum + Number(a.current_balance),
           0
@@ -50,9 +52,17 @@ export function AccountsList({ accounts }: { accounts: Account[] }) {
                 <Icon className="h-4 w-4 text-muted" />
                 <h3 className="text-sm font-medium text-muted capitalize">
                   {type}
+                  {isLia && (
+                    <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-deficit">
+                      Owed
+                    </span>
+                  )}
                 </h3>
               </div>
-              <span className="text-sm font-medium text-foreground">
+              <span
+                className={`text-sm font-medium ${isLia ? "text-deficit" : "text-foreground"}`}
+              >
+                {isLia ? "Owed: " : ""}
                 {formatCurrency(total)}
               </span>
             </div>
@@ -74,13 +84,22 @@ export function AccountsList({ accounts }: { accounts: Account[] }) {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p
+                      className={`text-sm font-semibold ${isLia ? "text-deficit" : "text-foreground"}`}
+                    >
+                      {isLia ? "Owed: " : ""}
                       {formatCurrency(Number(account.current_balance))}
                     </p>
-                    {account.available_balance !== null && (
+                    {account.available_balance !== null && !isLia && (
                       <p className="text-xs text-muted">
                         {formatCurrency(Number(account.available_balance))}{" "}
                         available
+                      </p>
+                    )}
+                    {isLia && account.available_balance !== null && (
+                      <p className="text-xs text-muted">
+                        {formatCurrency(Number(account.available_balance))}{" "}
+                        available credit
                       </p>
                     )}
                   </div>

@@ -69,6 +69,7 @@ interface ProjectedIncomeRow {
 
 interface AccountRow {
   book: Book;
+  type: string;
   current_balance: number | string;
   available_balance: number | string | null;
 }
@@ -232,7 +233,7 @@ async function handle(request: NextRequest) {
           await Promise.all([
             supabase
               .from("accounts")
-              .select("book, current_balance, available_balance")
+              .select("book, type, current_balance, available_balance")
               .in("book", allowed),
             supabase
               .from("bills")
@@ -268,11 +269,16 @@ async function handle(request: NextRequest) {
         const debtsRows = (debtsRes.data ?? []) as DebtRow[];
         const incomeRows = (incomeRes.data ?? []) as ProjectedIncomeRow[];
 
-        const startCash = accounts.reduce(
-          (sum, a) =>
-            sum + Number(a.available_balance ?? a.current_balance ?? 0),
-          0
-        );
+        // Shortfall check: start from spendable cash only. Adding credit-card
+        // or loan balances here would mask real shortfalls (their balances are
+        // money owed, not money held).
+        const startCash = accounts
+          .filter((a) => a.type === "depository")
+          .reduce(
+            (sum, a) =>
+              sum + Number(a.available_balance ?? a.current_balance ?? 0),
+            0
+          );
 
         let running = startCash;
         let firstShortfallDate: string | null = null;
@@ -327,7 +333,7 @@ async function handle(request: NextRequest) {
             .lte("due_date", weekEnd),
           supabase
             .from("accounts")
-            .select("book, current_balance, available_balance")
+            .select("book, type, current_balance, available_balance")
             .in("book", allowed),
           supabase
             .from("transactions")
@@ -341,11 +347,14 @@ async function handle(request: NextRequest) {
         const accounts = (accountsRes.data ?? []) as AccountRow[];
         const tx = (txRes.data ?? []) as TransactionRow[];
 
-        const totalCash = accounts.reduce(
-          (s, a) =>
-            s + Number(a.available_balance ?? a.current_balance ?? 0),
-          0
-        );
+        // Daily summary cash: depository only. Never include credit/loan.
+        const totalCash = accounts
+          .filter((a) => a.type === "depository")
+          .reduce(
+            (s, a) =>
+              s + Number(a.available_balance ?? a.current_balance ?? 0),
+            0
+          );
         let mtdIncome = 0;
         let mtdExpense = 0;
         for (const t of tx) {

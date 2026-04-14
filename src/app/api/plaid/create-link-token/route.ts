@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { plaidWebhookUrl } from "@/lib/plaid/webhook-url";
 
 export async function POST() {
   const supabase = await createClient();
@@ -27,6 +28,14 @@ export async function POST() {
       products: ["transactions", "liabilities"],
       country_codes: ["US"],
       language: "en",
+      // Register our webhook so Plaid can deliver SYNC_UPDATES_AVAILABLE and
+      // HISTORICAL_UPDATE events (the async channel that backfills beyond the
+      // initial ~90 days).
+      webhook: plaidWebhookUrl(),
+      // Ask Plaid for the full 24 months of history available to the
+      // Transactions product. Default is 30 days — without this, HO3 would
+      // only ever see a shallow window of spending.
+      transactions: { days_requested: 730 },
     }),
   });
 

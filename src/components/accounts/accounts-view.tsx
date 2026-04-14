@@ -467,7 +467,7 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {item.needs_reauth && (
+                {item.needs_reauth ? (
                   <button
                     onClick={() => handleReconnect(item)}
                     disabled={busyId === `reconn-${item.id}` || pendingDelete}
@@ -475,6 +475,16 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Reconnect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleReconnect(item)}
+                    disabled={busyId === `reconn-${item.id}` || pendingDelete}
+                    title="Re-link via Plaid Link to request 24 months of transaction history"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-card px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Extend history
                   </button>
                 )}
                 <button

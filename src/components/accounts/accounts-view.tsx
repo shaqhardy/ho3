@@ -385,7 +385,7 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
             disconnect what you don&rsquo;t want tracked.
           </p>
         </div>
-        <PlaidLinkButton />
+        <PlaidLinkButton allowedBooks={allowedBooks} returnTo="/accounts" />
       </header>
 
       {banks.length === 0 && manualAccounts.length === 0 && (
@@ -401,7 +401,7 @@ export function AccountsView({ isAdmin, allowedBooks, items, accounts }: Props) 
                 Personal, Business, or Nonprofit book.
               </p>
             </div>
-            <PlaidLinkButton />
+            <PlaidLinkButton allowedBooks={allowedBooks} returnTo="/accounts" />
           </div>
         </ElevatedCard>
       )}

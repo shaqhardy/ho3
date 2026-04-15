@@ -25,6 +25,7 @@ import {
   Beaker,
 } from "lucide-react";
 import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
+import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { BOOK_LABELS } from "@/lib/books";
 import { NetWorthTrend } from "@/components/charts/net-worth-trend";
 import { CategoryDonut } from "@/components/charts/category-donut";
@@ -114,8 +115,14 @@ export function OverviewDashboard({
         <EmptyState
           title="Welcome to HO3"
           description="Three books, one clear picture. Connect your first bank to see your net worth, upcoming bills, and where your money is going."
-          cta={{ label: "Connect your first account", href: "/personal" }}
         >
+          <div className="flex flex-col items-center gap-3">
+            <PlaidLinkButton label="Connect your first account" />
+            <p className="text-xs text-muted max-w-md text-center">
+              Pick the book these accounts belong to on the next step —
+              Personal, Shaq Hardy LLC, or Orphan No More.
+            </p>
+          </div>
           <div>
             <p className="label-sm mb-3">Preview</p>
             <div

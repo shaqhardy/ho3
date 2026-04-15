@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import type { Account, Transaction, Subscription, Category, Book } from "@/lib/types";
 import { AccountsList } from "@/components/personal/accounts-list";
 import { EmptyState } from "@/components/empty-state";
+import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { Plus, RotateCw, Pause, Beaker } from "lucide-react";
 import Link from "next/link";
 import {
@@ -52,21 +53,26 @@ export function BookDashboard({
 
     return (
       <div className="has-bottom-nav space-y-6">
-        <header>
-          <p className="label-sm">Book</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {bookLabel}
-          </h1>
+        <header className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <p className="label-sm">Book</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {bookLabel}
+            </h1>
+          </div>
+          <PlaidLinkButton book={book} label="Connect Bank Account" />
         </header>
         <EmptyState
           title={`Start tracking ${bookLabel}`}
           description={description}
-          cta={{ label: "Connect an account", href: "/personal" }}
         >
-          <p className="text-sm text-muted max-w-lg mx-auto leading-relaxed">
-            Accounts are connected from the Personal page and can be reassigned
-            to this book from the admin panel.
-          </p>
+          <div className="flex flex-col items-center gap-3">
+            <PlaidLinkButton book={book} label="Connect an account" />
+            <p className="text-xs text-muted max-w-md text-center">
+              New accounts will default to {bookLabel}. You can reassign any
+              of them to a different book on the next step.
+            </p>
+          </div>
         </EmptyState>
       </div>
     );
@@ -150,11 +156,14 @@ export function BookDashboard({
 
   return (
     <div className="has-bottom-nav space-y-8">
-      <header>
-        <p className="label-sm">Book</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-          {bookLabel}
-        </h1>
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="label-sm">Book</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {bookLabel}
+          </h1>
+        </div>
+        <PlaidLinkButton book={book} label="Connect Bank Account" />
       </header>
 
       <section>

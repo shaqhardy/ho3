@@ -52,7 +52,7 @@ export function PersonalDashboard({
               Personal
             </h1>
           </div>
-          <PlaidLinkButton />
+          <PlaidLinkButton book="personal" />
         </header>
 
         <EmptyState
@@ -175,7 +175,7 @@ export function PersonalDashboard({
             Personal
           </h1>
         </div>
-        <PlaidLinkButton />
+        <PlaidLinkButton book="personal" />
       </header>
 
       {/* Hero cash card */}

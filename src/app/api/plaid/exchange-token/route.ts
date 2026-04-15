@@ -19,7 +19,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { public_token, institution } = await request.json();
+  const { public_token, institution, book: bookRaw } = await request.json();
+  const ALLOWED_BOOKS = ["personal", "business", "nonprofit"] as const;
+  type BookT = (typeof ALLOWED_BOOKS)[number];
+  const book: BookT = ALLOWED_BOOKS.includes(bookRaw)
+    ? (bookRaw as BookT)
+    : "personal";
 
   const { ok: exOk, data: exData } = await plaidFetch<{
     access_token: string;
@@ -66,23 +71,45 @@ export async function POST(request: NextRequest) {
   }>("/accounts/get", { access_token });
 
   let accountsAdded = 0;
+  const insertedAccounts: Array<{
+    id: string;
+    name: string;
+    mask: string | null;
+    type: string;
+    subtype: string | null;
+    book: BookT;
+  }> = [];
   if (acctOk && acctData.accounts) {
     for (const account of acctData.accounts) {
-      await adminSupabase.from("accounts").upsert(
-        {
-          plaid_account_id: account.account_id,
-          plaid_item_id: item_id,
-          name: account.name,
-          current_balance: account.balances.current || 0,
-          available_balance: account.balances.available,
-          type: account.type,
-          subtype: account.subtype,
-          mask: account.mask,
-          book: "personal",
-          last_synced_at: new Date().toISOString(),
-        },
-        { onConflict: "plaid_account_id" }
-      );
+      const { data: row } = await adminSupabase
+        .from("accounts")
+        .upsert(
+          {
+            plaid_account_id: account.account_id,
+            plaid_item_id: item_id,
+            name: account.name,
+            current_balance: account.balances.current || 0,
+            available_balance: account.balances.available,
+            type: account.type,
+            subtype: account.subtype,
+            mask: account.mask,
+            book,
+            last_synced_at: new Date().toISOString(),
+          },
+          { onConflict: "plaid_account_id" }
+        )
+        .select("id, name, mask, type, subtype, book")
+        .single();
+      if (row) {
+        insertedAccounts.push({
+          id: row.id as string,
+          name: row.name as string,
+          mask: (row.mask as string | null) ?? null,
+          type: row.type as string,
+          subtype: (row.subtype as string | null) ?? null,
+          book: row.book as BookT,
+        });
+      }
       accountsAdded++;
     }
   }
@@ -107,5 +134,7 @@ export async function POST(request: NextRequest) {
     accounts_added: accountsAdded,
     transactions_added: txnsAdded,
     sync_error: syncError,
+    book,
+    accounts: insertedAccounts,
   });
 }

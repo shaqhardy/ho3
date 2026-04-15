@@ -9,6 +9,7 @@ import {
 } from "@/lib/push/notifications";
 import { currentPeriodRange } from "@/lib/budgets/compute";
 import { generateTuneUpSuggestions } from "@/lib/budgets/suggestions";
+import { syncStatementsForItems } from "@/lib/plaid/statements";
 import type { Book } from "@/lib/types";
 
 // Ensure this runs on Node.js (web-push uses node crypto).
@@ -615,5 +616,24 @@ async function handle(request: NextRequest) {
     console.error("[cron daily] tune-up generation failed", err);
   }
 
-  return NextResponse.json({ processed, tune_up });
+  // Final step: pull fresh Plaid statements for every item and upload any new
+  // PDFs into the documents bucket. Non-fatal if it errors.
+  let statements: { synced: number; downloaded: number } = {
+    synced: 0,
+    downloaded: 0,
+  };
+  try {
+    const { data: plaidItems } = await supabase
+      .from("plaid_items")
+      .select(
+        "id, user_id, plaid_item_id, plaid_access_token, institution_name"
+      );
+    if (plaidItems?.length) {
+      statements = await syncStatementsForItems(supabase, plaidItems);
+    }
+  } catch (err) {
+    console.error("[cron daily] statements sync failed", err);
+  }
+
+  return NextResponse.json({ processed, tune_up, statements });
 }

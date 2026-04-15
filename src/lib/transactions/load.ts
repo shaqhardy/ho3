@@ -28,6 +28,8 @@ export interface TxnRow {
   plaid_transaction_id: string | null;
   is_income: boolean;
   split_parent_id: string | null;
+  ai_categorized: boolean;
+  ai_confidence: number | null;
   created_at: string;
   categories: { id: string; name: string } | null;
 }
@@ -79,7 +81,7 @@ export async function loadTransactionsData(
       supabase
         .from("transactions")
         .select(
-          "id, account_id, book, date, amount, merchant, description, category_id, notes, receipt_url, plaid_transaction_id, is_income, split_parent_id, created_at, categories(id, name)"
+          "id, account_id, book, date, amount, merchant, description, category_id, notes, receipt_url, plaid_transaction_id, is_income, split_parent_id, ai_categorized, ai_confidence, created_at, categories(id, name)"
         )
         .eq("book", book)
         .order("date", { ascending: false })

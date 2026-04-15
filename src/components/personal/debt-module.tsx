@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Card, StatCard } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
+import { formatCurrency, formatDate, formatRelativeDate } from "@/lib/format";
+import { createClient } from "@/lib/supabase/client";
 import type { Debt, DebtStatement } from "@/lib/types";
 import {
   Plus,
@@ -12,31 +13,44 @@ import {
   Check,
   TrendingDown,
   CreditCard,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { DebtPayoffChart } from "@/components/charts/debt-payoff";
+import { DebtPayoffStackedChart } from "@/components/charts/debt-payoff-stacked";
+import {
+  amortize,
+  amortizeWithExtra,
+  projectPortfolio,
+  formatMonthsHuman,
+  formatYmdMonth,
+  type DebtLike,
+  type Strategy,
+} from "@/lib/finance/amortization";
+import { CHART_COLORS } from "@/components/charts/palette";
 
-function calculatePayoff(
-  balance: number,
-  apr: number,
-  minPayment: number
-): { months: number; totalInterest: number } {
-  if (minPayment <= 0 || balance <= 0) return { months: 0, totalInterest: 0 };
+type DebtWithColor = Debt & { color?: string | null };
 
-  const monthlyRate = apr / 100 / 12;
-  let remaining = balance;
-  let months = 0;
-  let totalInterest = 0;
+function toDebtLike(d: Debt, fallbackColor?: string): DebtLike {
+  return {
+    id: d.id,
+    current_balance: Number(d.current_balance),
+    apr: Number(d.apr),
+    minimum_payment: Number(d.minimum_payment),
+    creditor: d.creditor,
+    nickname: d.nickname,
+    color: (d as DebtWithColor).color ?? fallbackColor ?? null,
+  };
+}
 
-  while (remaining > 0 && months < 600) {
-    const interest = remaining * monthlyRate;
-    totalInterest += interest;
-    const principal = Math.min(minPayment - interest, remaining);
-    if (principal <= 0) return { months: 999, totalInterest: 999999 };
-    remaining -= principal;
-    months++;
-  }
-
-  return { months, totalInterest };
+/** Tiny debounce hook — we want the chart to recompute only after the user
+ * pauses typing in the "extra/month" input rather than on every keystroke. */
+function useDebounced<T>(value: T, delay = 250): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return v;
 }
 
 export function DebtModule({
@@ -49,24 +63,53 @@ export function DebtModule({
   const [showForm, setShowForm] = useState(false);
   const [uploadingDebtId, setUploadingDebtId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [strategy, setStrategy] = useState<Strategy>("avalanche");
+  const [extraInput, setExtraInput] = useState<string>("0");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
 
-  const totalDebt = debts.reduce(
-    (sum, d) => sum + Number(d.current_balance),
-    0
+  const extraRaw = Number(extraInput);
+  const monthlyExtra = Number.isFinite(extraRaw) && extraRaw > 0 ? extraRaw : 0;
+  const debouncedExtra = useDebounced(monthlyExtra, 250);
+
+  const debtLikes = useMemo(
+    () => debts.map((d, i) => toDebtLike(d, CHART_COLORS[i % CHART_COLORS.length])),
+    [debts]
   );
-  const totalMinimum = debts.reduce(
-    (sum, d) => sum + Number(d.minimum_payment),
-    0
-  );
+
+  const totalDebt = debtLikes.reduce((s, d) => s + d.current_balance, 0);
+  const totalMinimum = debtLikes.reduce((s, d) => s + d.minimum_payment, 0);
   const weightedApr =
     totalDebt > 0
-      ? debts.reduce(
-          (sum, d) =>
-            sum + (Number(d.apr) * Number(d.current_balance)) / totalDebt,
-          0
-        )
+      ? debtLikes.reduce((s, d) => s + (d.apr * d.current_balance) / totalDebt, 0)
       : 0;
+
+  // Portfolio projections — baseline (min only) and with extras.
+  const projMin = useMemo(
+    () => projectPortfolio(debtLikes, 0, strategy),
+    [debtLikes, strategy]
+  );
+  const projExtra = useMemo(
+    () => projectPortfolio(debtLikes, debouncedExtra, strategy),
+    [debtLikes, debouncedExtra, strategy]
+  );
+
+  const savedInterest = Math.max(0, projMin.totalInterest - projExtra.totalInterest);
+  const monthsSaved = Math.max(0, projMin.months - projExtra.months);
+
+  // How the global extra is allocated this month — whichever debt is the
+  // current focus for the chosen strategy gets the whole pool.
+  const focusDebtId = useMemo(() => {
+    if (debtLikes.length === 0 || debouncedExtra <= 0) return null;
+    const ordered = [...debtLikes];
+    if (strategy === "avalanche") {
+      ordered.sort((a, b) => b.apr - a.apr || b.current_balance - a.current_balance);
+    } else {
+      ordered.sort((a, b) => a.current_balance - b.current_balance || b.apr - a.apr);
+    }
+    const first = ordered.find((d) => d.current_balance > 0);
+    return first?.id ?? null;
+  }, [debtLikes, strategy, debouncedExtra]);
 
   async function addDebt(formData: FormData) {
     const supabase = createClient();
@@ -98,7 +141,6 @@ export function DebtModule({
       return;
     }
 
-    // Run OCR
     const res = await fetch("/api/ocr/parse-statement", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -108,7 +150,6 @@ export function DebtModule({
     const data = await res.json();
 
     if (data.statement && data.parsed) {
-      // Show parsed data for confirmation
       const confirmUpdate = confirm(
         `OCR found:\n` +
           `Balance: ${data.parsed.current_balance ? formatCurrency(data.parsed.current_balance) : "N/A"}\n` +
@@ -128,13 +169,9 @@ export function DebtModule({
         if (data.parsed.apr) updates.apr = data.parsed.apr;
 
         if (Object.keys(updates).length > 0) {
-          await supabase
-            .from("debts")
-            .update(updates)
-            .eq("id", debtId);
+          await supabase.from("debts").update(updates).eq("id", debtId);
         }
 
-        // Mark statement as confirmed
         await supabase
           .from("debt_statements")
           .update({ confirmed: true })
@@ -171,14 +208,60 @@ export function DebtModule({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {/* Hero: Debt-free date */}
+      {debtLikes.length > 0 && totalDebt > 0 && (
+        <ElevatedCard accent="terracotta">
+          <p className="label-sm">Debt-free date</p>
+          {projMin.months >= 600 ? (
+            <p className="mt-2 hero-value text-deficit">
+              Minimum payments don&apos;t cover interest.
+            </p>
+          ) : (
+            <p className="mt-2 hero-value text-foreground">
+              {formatYmdMonth(projMin.payoffDate)}
+              <span className="ml-2 text-base font-normal text-muted">
+                at current pace ({formatMonthsHuman(projMin.months)})
+              </span>
+            </p>
+          )}
+          {debouncedExtra > 0 && projExtra.months < 600 ? (
+            <p className="mt-3 text-sm text-muted">
+              With{" "}
+              <span className="font-semibold text-foreground">
+                {formatCurrency(debouncedExtra)}/mo extra
+              </span>
+              , you&apos;d be debt-free by{" "}
+              <span className="font-semibold text-terracotta">
+                {formatYmdMonth(projExtra.payoffDate)}
+              </span>{" "}
+              — saving{" "}
+              <span className="font-semibold text-surplus">
+                {formatCurrency(savedInterest)}
+              </span>{" "}
+              in interest,{" "}
+              <span className="font-semibold text-surplus">
+                {formatMonthsHuman(monthsSaved)}
+              </span>{" "}
+              sooner.
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              Add an extra-payment amount below to see how much faster you could
+              be debt-free.
+            </p>
+          )}
+        </ElevatedCard>
+      )}
+
+      {/* Overview stats */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="Total Debt"
           value={formatCurrency(totalDebt)}
           color="text-deficit"
         />
         <StatCard
-          label="Monthly Minimums"
+          label="Total Min Payments"
           value={formatCurrency(totalMinimum)}
           color="text-warning"
         />
@@ -187,12 +270,80 @@ export function DebtModule({
           value={`${weightedApr.toFixed(1)}%`}
           color="text-muted"
         />
+        <StatCard
+          label="Projected Interest"
+          value={
+            projMin.months >= 600
+              ? "∞"
+              : formatCurrency(projMin.totalInterest)
+          }
+          subtext="Min payments only"
+          color="text-deficit"
+        />
       </div>
 
-      {debts.length > 0 && (
+      {/* Strategy + extras controls */}
+      {debtLikes.length > 0 && (
         <Card>
-          <DebtPayoffChart
-            debts={debts as Parameters<typeof DebtPayoffChart>[0]["debts"]}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="label-sm">Strategy</span>
+              <div className="flex overflow-hidden rounded-lg border border-border">
+                <button
+                  onClick={() => setStrategy("avalanche")}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    strategy === "avalanche"
+                      ? "bg-terracotta text-white"
+                      : "bg-card text-muted hover:text-foreground"
+                  }`}
+                >
+                  Avalanche
+                </button>
+                <button
+                  onClick={() => setStrategy("snowball")}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    strategy === "snowball"
+                      ? "bg-terracotta text-white"
+                      : "bg-card text-muted hover:text-foreground"
+                  }`}
+                >
+                  Snowball
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="label-sm">Extra/month</span>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted">
+                  $
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={25}
+                  value={extraInput}
+                  onChange={(e) => setExtraInput(e.target.value)}
+                  className="w-28 rounded-lg border border-border bg-background pl-6 pr-2 py-1.5 text-sm text-foreground focus:border-terracotta focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-muted">
+            {strategy === "avalanche"
+              ? "Avalanche puts the extra on the highest-APR debt first."
+              : "Snowball puts the extra on the smallest balance first."}
+          </p>
+        </Card>
+      )}
+
+      {/* Timeline chart */}
+      {debtLikes.length > 0 && (
+        <Card>
+          <DebtPayoffStackedChart
+            debts={debtLikes}
+            monthlyExtra={debouncedExtra}
+            strategy={strategy}
           />
         </Card>
       )}
@@ -262,127 +413,168 @@ export function DebtModule({
         </Card>
       )}
 
+      {/* Debt list */}
       {debts.length === 0 && !showForm ? (
         <Card className="text-center py-12">
           <CreditCard className="mx-auto h-8 w-8 text-muted mb-3" />
           <p className="text-muted">No debt accounts added yet.</p>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {debts.map((debt) => {
-            // Use stored projections from Plaid sync, fall back to client calc
-            const payoff = debt.projected_payoff_months != null
-              ? {
-                  months: debt.projected_payoff_months as number,
-                  totalInterest: Number(debt.projected_total_interest) || 0,
-                }
-              : calculatePayoff(
-                  Number(debt.current_balance),
-                  Number(debt.apr),
-                  Number(debt.minimum_payment)
-                );
+        <div className="space-y-3">
+          {debts.map((debt, i) => {
+            const dl = debtLikes[i];
+            const color = dl.color ?? CHART_COLORS[i % CHART_COLORS.length];
+            const monthlyInterest =
+              (dl.current_balance * dl.apr) / 100 / 12;
+            const perDebt = projExtra.perDebt[dl.id];
+            const allocatedExtra = focusDebtId === dl.id ? debouncedExtra : 0;
+            const isExpanded = expandedId === dl.id;
             const debtStatements = statements.filter(
-              (s) => s.debt_id === debt.id
+              (s) => s.debt_id === dl.id
             );
 
             return (
-              <Card key={debt.id} className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      {debt.creditor}
-                    </h3>
-                    {debt.nickname && (
-                      <p className="text-xs text-muted">{debt.nickname}</p>
-                    )}
+              <Card key={dl.id} className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      aria-hidden
+                      className="h-8 w-1 flex-shrink-0 rounded-full"
+                      style={{ background: color ?? undefined }}
+                    />
+                    <div className="min-w-0">
+                      {debt.account_id ? (
+                        <Link
+                          href={`/accounts/${debt.account_id}`}
+                          className="text-base font-semibold text-foreground hover:text-terracotta transition-colors"
+                        >
+                          {debt.creditor}
+                        </Link>
+                      ) : (
+                        <h3 className="text-base font-semibold text-foreground">
+                          {debt.creditor}
+                        </h3>
+                      )}
+                      {debt.nickname && (
+                        <p className="text-xs text-muted truncate">
+                          {debt.nickname}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-lg font-bold text-deficit">
-                    {formatCurrency(Number(debt.current_balance))}
-                  </p>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-deficit">
+                      {formatCurrency(dl.current_balance)}
+                    </p>
+                    <p className="text-[11px] text-muted">
+                      +{formatCurrency(monthlyInterest)}/mo interest
+                    </p>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
                   <div>
                     <p className="text-xs text-muted">APR</p>
-                    <p className="font-medium">{Number(debt.apr)}%</p>
+                    <p className="font-medium">{dl.apr.toFixed(2)}%</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted">Min Payment</p>
                     <p className="font-medium">
-                      {formatCurrency(Number(debt.minimum_payment))}
+                      {formatCurrency(dl.minimum_payment)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted">Due Date</p>
+                    <p className="text-xs text-muted">Next Due</p>
                     <p className="font-medium">
-                      {formatDate(debt.statement_due_date)}
+                      {debt.statement_due_date
+                        ? formatRelativeDate(debt.statement_due_date)
+                        : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted">Payoff (min only)</p>
+                    <p className="text-xs text-muted">Payoff</p>
                     <p className="font-medium">
-                      {payoff.months >= 999
-                        ? "Never"
-                        : `${payoff.months} months`}
+                      {perDebt
+                        ? perDebt.months >= 600
+                          ? "Never"
+                          : formatYmdMonth(perDebt.payoffDate)
+                        : "—"}
                     </p>
-                    {payoff.totalInterest < 999999 && (
-                      <p className="text-xs text-deficit">
-                        {formatCurrency(payoff.totalInterest)} interest
-                      </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Extra this month</p>
+                    <p
+                      className={`font-medium ${
+                        allocatedExtra > 0 ? "text-terracotta" : "text-muted"
+                      }`}
+                    >
+                      {allocatedExtra > 0
+                        ? formatCurrency(allocatedExtra)
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border pt-2">
+                  <button
+                    onClick={() =>
+                      setExpandedId(isExpanded ? null : dl.id)
+                    }
+                    className="flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                    Extra-payment calculator
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs text-muted">
+                      <TrendingDown className="h-3.5 w-3.5" />
+                      {debtStatements.length} statement
+                      {debtStatements.length !== 1 ? "s" : ""}
+                    </div>
+                    {uploadingDebtId === dl.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          disabled={uploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUpload(dl.id, file);
+                          }}
+                          className="text-xs text-muted"
+                        />
+                        {uploading && (
+                          <span className="text-xs text-terracotta">
+                            Processing...
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setUploadingDebtId(dl.id)}
+                        className="flex items-center gap-1.5 text-xs text-muted hover:text-terracotta transition-colors"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Upload Statement
+                      </button>
                     )}
                   </div>
                 </div>
-                {debt.last_synced_at && (
-                  <p className="text-[10px] text-muted">
-                    Last synced: {new Date(String(debt.last_synced_at)).toLocaleString()}
-                  </p>
+
+                {isExpanded && (
+                  <PerDebtCalculator debt={dl} />
                 )}
 
-                {/* Statement upload */}
-                <div className="flex items-center justify-between border-t border-border pt-3">
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="h-4 w-4 text-muted" />
-                    <p className="text-xs text-muted">
-                      {debtStatements.length} statement
-                      {debtStatements.length !== 1 ? "s" : ""} on file
-                    </p>
-                  </div>
-                  {uploadingDebtId === debt.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        disabled={uploading}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleUpload(debt.id, file);
-                        }}
-                        className="text-xs text-muted"
-                      />
-                      {uploading && (
-                        <span className="text-xs text-terracotta">
-                          Processing...
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setUploadingDebtId(debt.id)}
-                      className="flex items-center gap-1.5 text-xs text-muted hover:text-terracotta transition-colors"
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      Upload Statement
-                    </button>
-                  )}
-                </div>
-
-                {/* Recent statements */}
                 {debtStatements.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 border-t border-border pt-2">
                     {debtStatements.slice(0, 3).map((stmt) => (
                       <div
                         key={stmt.id}
-                        className="flex items-center justify-between text-xs py-1"
+                        className="flex items-center justify-between text-xs py-0.5"
                       >
                         <div className="flex items-center gap-2">
                           {stmt.confirmed ? (
@@ -410,11 +602,108 @@ export function DebtModule({
                     ))}
                   </div>
                 )}
+
+                {debt.last_synced_at && (
+                  <p className="text-[10px] text-muted">
+                    Last synced:{" "}
+                    {new Date(String(debt.last_synced_at)).toLocaleString()}
+                  </p>
+                )}
               </Card>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inline per-debt extra-payment what-if. Compares the minimum-only schedule
+ * against a user-specified extra payment for this one debt in isolation.
+ */
+function PerDebtCalculator({ debt }: { debt: DebtLike }) {
+  const [extraStr, setExtraStr] = useState("100");
+  const extraRaw = Number(extraStr);
+  const extra = Number.isFinite(extraRaw) && extraRaw > 0 ? extraRaw : 0;
+
+  const minOnly = useMemo(
+    () => amortize(debt.current_balance, debt.apr, debt.minimum_payment),
+    [debt]
+  );
+  const withExtra = useMemo(
+    () =>
+      amortizeWithExtra(
+        debt.current_balance,
+        debt.apr,
+        debt.minimum_payment,
+        { amount: extra, frequency: "monthly" }
+      ),
+    [debt, extra]
+  );
+
+  const savedInterest = Math.max(0, minOnly.totalInterest - withExtra.totalInterest);
+  const savedMonths = Math.max(0, minOnly.months - withExtra.months);
+
+  return (
+    <div className="rounded-lg border border-border-subtle bg-background/40 p-3 text-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">Add</span>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted">
+              $
+            </span>
+            <input
+              type="number"
+              min={0}
+              step={25}
+              value={extraStr}
+              onChange={(e) => setExtraStr(e.target.value)}
+              className="w-24 rounded-md border border-border bg-background pl-6 pr-2 py-1 text-sm text-foreground focus:border-terracotta focus:outline-none"
+            />
+          </div>
+          <span className="text-xs text-muted">/month to this debt</span>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div>
+          <p className="text-[11px] text-muted">Minimum only</p>
+          <p className="font-medium">
+            {minOnly.months >= 600
+              ? "Never"
+              : formatMonthsHuman(minOnly.months)}
+          </p>
+          <p className="text-[11px] text-deficit">
+            {minOnly.months >= 600
+              ? "—"
+              : `${formatCurrency(minOnly.totalInterest)} interest`}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-muted">With extra</p>
+          <p className="font-medium">
+            {withExtra.months >= 600
+              ? "Never"
+              : formatMonthsHuman(withExtra.months)}
+          </p>
+          <p className="text-[11px] text-deficit">
+            {withExtra.months >= 600
+              ? "—"
+              : `${formatCurrency(withExtra.totalInterest)} interest`}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-muted">You save</p>
+          <p className="font-medium text-surplus">
+            {formatCurrency(savedInterest)}
+          </p>
+          <p className="text-[11px] text-surplus">
+            {formatMonthsHuman(savedMonths)} sooner
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
+import { syncStatementsForItems } from "@/lib/plaid/statements";
+import { aiCategorizeFreshTxns } from "@/lib/ai/sync-hook";
 import { autoMatchBillForTransaction } from "@/lib/bills/auto-match";
 import { sendPushToUser } from "@/lib/push/send";
 import {
@@ -170,6 +172,7 @@ export async function POST() {
 
   let totalAdded = 0;
   let totalModified = 0;
+  const newlyAddedTxnIds: string[] = [];
 
   for (const item of plaidItems) {
     // Sync transactions using cursor-based pagination
@@ -272,6 +275,7 @@ export async function POST() {
           .maybeSingle();
 
         const txnId = upserted?.id ?? null;
+        if (txnId && !categoryId) newlyAddedTxnIds.push(txnId);
 
         // Auto-create category rule if merchant is new
         if (categoryId && txn.merchant_name) {
@@ -562,11 +566,34 @@ export async function POST() {
   // Sync liabilities and recalculate payoff projections (also fires milestone pushes).
   const liabilitiesSynced = await syncLiabilities(adminSupabase, plaidItems);
 
+  // Pull statements (PDFs + metadata) for any item that supports the product.
+  let statementsResult: { synced: number; downloaded: number } = {
+    synced: 0,
+    downloaded: 0,
+  };
+  try {
+    statementsResult = await syncStatementsForItems(adminSupabase, plaidItems);
+  } catch (err) {
+    console.error("Statements sync failed:", err);
+  }
+
+  // AI-categorize newly added transactions that didn't match a manual rule.
+  let aiStats = { considered: 0, rule_applied: 0, ai_applied: 0, skipped: 0 };
+  if (newlyAddedTxnIds.length > 0) {
+    try {
+      aiStats = await aiCategorizeFreshTxns(adminSupabase, newlyAddedTxnIds);
+    } catch (err) {
+      console.error("AI categorization failed:", err);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     added: totalAdded,
     modified: totalModified,
     liabilities_synced: liabilitiesSynced,
+    statements: statementsResult,
+    ai: aiStats,
   });
 }
 

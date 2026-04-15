@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import type { Account } from "@/lib/types";
@@ -68,42 +69,44 @@ export function AccountsList({ accounts }: { accounts: Account[] }) {
             </div>
             <div className="space-y-2">
               {accts.map((account) => (
-                <Card
-                  key={account.id}
-                  className="flex items-center justify-between py-3 px-4"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {account.name}
-                    </p>
-                    {account.mask && (
-                      <p className="text-xs text-muted">
-                        ••••{account.mask}
-                        {account.subtype && ` · ${account.subtype}`}
+                <Link key={account.id} href={`/accounts/${account.id}`}>
+                  <Card
+                    interactive
+                    className="flex items-center justify-between py-3 px-4 cursor-pointer"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {account.name}
                       </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-sm font-semibold ${isLia ? "text-deficit" : "text-foreground"}`}
-                    >
-                      {isLia ? "Owed: " : ""}
-                      {formatCurrency(Number(account.current_balance))}
-                    </p>
-                    {account.available_balance !== null && !isLia && (
-                      <p className="text-xs text-muted">
-                        {formatCurrency(Number(account.available_balance))}{" "}
-                        available
+                      {account.mask && (
+                        <p className="text-xs text-muted">
+                          ••••{account.mask}
+                          {account.subtype && ` · ${account.subtype}`}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-semibold ${isLia ? "text-deficit" : "text-foreground"}`}
+                      >
+                        {isLia ? "Owed: " : ""}
+                        {formatCurrency(Number(account.current_balance))}
                       </p>
-                    )}
-                    {isLia && account.available_balance !== null && (
-                      <p className="text-xs text-muted">
-                        {formatCurrency(Number(account.available_balance))}{" "}
-                        available credit
-                      </p>
-                    )}
-                  </div>
-                </Card>
+                      {account.available_balance !== null && !isLia && (
+                        <p className="text-xs text-muted">
+                          {formatCurrency(Number(account.available_balance))}{" "}
+                          available
+                        </p>
+                      )}
+                      {isLia && account.available_balance !== null && (
+                        <p className="text-xs text-muted">
+                          {formatCurrency(Number(account.available_balance))}{" "}
+                          available credit
+                        </p>
+                      )}
+                    </div>
+                  </Card>
+                </Link>
               ))}
             </div>
           </div>

@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
 import {
@@ -640,9 +641,14 @@ function AccountRowView({
         pending ? "opacity-60" : ""
       }`}
     >
-      <div className="min-w-0 flex-1">
+      <Link
+        href={`/accounts/${acct.id}`}
+        className={`min-w-0 flex-1 group rounded-lg -mx-1 px-1 py-0.5 transition-colors hover:bg-card-hover ${
+          pending ? "pointer-events-none" : ""
+        }`}
+      >
         <div className="flex items-center gap-2">
-          <p className="truncate font-medium">
+          <p className="truncate font-medium group-hover:text-terracotta">
             {label}
             {acct.mask && (
               <span className="ml-1 text-xs font-normal text-muted">
@@ -674,7 +680,7 @@ function AccountRowView({
             <> • synced {timeAgo(acct.last_synced_at)}</>
           )}
         </p>
-      </div>
+      </Link>
 
       <div className="flex items-center gap-2">
         <label className="sr-only" htmlFor={`book-${acct.id}`}>

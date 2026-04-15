@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Sparkles,
   Split,
   Trash2,
   X,
@@ -633,8 +634,19 @@ export function TransactionsView({
                   </td>
                   <td className="px-2 py-2">
                     {t.categories?.name ? (
-                      <span className="rounded bg-card-hover px-1.5 py-0.5 text-xs">
+                      <span className="inline-flex items-center gap-1 rounded bg-card-hover px-1.5 py-0.5 text-xs">
                         {t.categories.name}
+                        {t.ai_categorized && (
+                          <span
+                            title="Auto-categorized by AI"
+                            className="inline-flex"
+                          >
+                            <Sparkles
+                              className="h-2.5 w-2.5 text-terracotta"
+                              aria-label="Auto-categorized by AI"
+                            />
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="text-xs text-muted italic">
@@ -998,6 +1010,15 @@ function TxnDetail({
                 </option>
               ))}
             </select>
+            {txn.ai_categorized && (
+              <p className="mt-1 flex items-center gap-1 text-[10px] text-terracotta">
+                <Sparkles className="h-3 w-3" />
+                Originally set by AI
+                {typeof txn.ai_confidence === "number"
+                  ? ` · ${Math.round(txn.ai_confidence * 100)}% confidence`
+                  : ""}
+              </p>
+            )}
             {categoryId && categoryId !== (txn.category_id ?? "") && (
               <label className="mt-2 flex items-center gap-2 text-xs text-muted">
                 <input

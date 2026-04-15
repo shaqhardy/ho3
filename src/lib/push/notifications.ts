@@ -273,6 +273,26 @@ export function buildCategoryOverspendPush(
   };
 }
 
+// ---- Statement available ----------------------------------------------------
+export function buildStatementAvailablePush(args: {
+  account_id: string;
+  account_name?: string | null;
+  period_end: string;
+}): PushPayload {
+  const label = args.account_name || "an account";
+  return {
+    title: `New statement: ${label}`,
+    body: `Statement period ending ${args.period_end} is available.`,
+    url: `/accounts/${args.account_id}`,
+    tag: `statement-${args.account_id}-${args.period_end}`,
+    data: {
+      kind: "statement_available",
+      account_id: args.account_id,
+      period_end: args.period_end,
+    },
+  };
+}
+
 // ---- Goal hit ---------------------------------------------------------------
 export function buildGoalHitPush(goal: {
   id: string;

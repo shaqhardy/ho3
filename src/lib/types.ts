@@ -47,6 +47,37 @@ export interface Transaction {
   receipt_url: string | null;
   plaid_transaction_id: string | null;
   is_income: boolean;
+  pfc_primary: string | null;
+  pfc_detailed: string | null;
+  ai_categorized: boolean;
+  ai_categorized_at: string | null;
+  ai_confidence: number | null;
+  ai_model: string | null;
+  created_at: string;
+}
+
+export interface AccountStatement {
+  id: string;
+  account_id: string;
+  plaid_statement_id: string | null;
+  period_start: string;
+  period_end: string;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  total_debits: number | null;
+  total_credits: number | null;
+  storage_path: string | null;
+  byte_size: number | null;
+  downloaded_at: string | null;
+  created_at: string;
+}
+
+export interface AccountBalanceSnapshot {
+  id: string;
+  account_id: string;
+  snapshot_date: string;
+  current_balance: number;
+  available_balance: number | null;
   created_at: string;
 }
 
@@ -56,6 +87,10 @@ export interface Category {
   name: string;
   parent_id: string | null;
   icon: string | null;
+  color: string | null;
+  is_shared: boolean;
+  is_archived: boolean;
+  sort_order: number;
   created_at: string;
 }
 

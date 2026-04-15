@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ElevatedCard } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { BOOK_LABELS } from "@/lib/books";
 
 type Book = "personal" | "business" | "nonprofit";
@@ -56,6 +56,72 @@ export function CategorizeView({
   const router = useRouter();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiProgress, setAiProgress] = useState<{
+    total: number;
+    processed: number;
+    rule_applied: number;
+    ai_applied: number;
+    skipped: number;
+  } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function runAiBackfill() {
+    if (aiBusy) return;
+    setAiBusy(true);
+    setAiProgress(null);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const res = await fetch("/api/categorize/backfill", {
+        method: "POST",
+        signal: ctrl.signal,
+      });
+      if (!res.ok || !res.body) throw new Error("Backfill failed");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const evt = JSON.parse(line) as {
+              type: string;
+              total?: number;
+              processed?: number;
+              rule_applied?: number;
+              ai_applied?: number;
+              skipped?: number;
+            };
+            if (evt.type === "progress" || evt.type === "done" || evt.type === "start") {
+              setAiProgress({
+                total: evt.total ?? 0,
+                processed: evt.processed ?? 0,
+                rule_applied: evt.rule_applied ?? 0,
+                ai_applied: evt.ai_applied ?? 0,
+                skipped: evt.skipped ?? 0,
+              });
+            }
+          } catch {
+            /* ignore malformed line */
+          }
+        }
+      }
+      router.refresh();
+    } catch (err) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        console.error(err);
+        alert("AI backfill failed");
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   // Group by merchant. Blank-merchant rows are bucketed under description.
   const groups: MerchantGroup[] = useMemo(() => {
@@ -120,7 +186,60 @@ export function CategorizeView({
             have.
           </p>
         </div>
+        <button
+          onClick={runAiBackfill}
+          disabled={aiBusy}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-terracotta px-3 py-2 text-sm font-medium text-white hover:bg-terracotta-hover disabled:opacity-60"
+          title="Runs manual rules first, then Claude for leftovers. Updates Other-tagged txns too."
+        >
+          {aiBusy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Wand2 className="h-4 w-4" />
+          )}
+          Auto-categorize uncategorized with AI
+        </button>
       </header>
+
+      {aiProgress && (
+        <Card accent="terracotta">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="label-sm">AI backfill</p>
+              <p className="mt-0.5 num">
+                {aiProgress.processed} / {aiProgress.total} processed
+              </p>
+            </div>
+            <div className="flex gap-4 text-xs text-muted">
+              <span>
+                Rule:{" "}
+                <span className="text-surplus num">{aiProgress.rule_applied}</span>
+              </span>
+              <span>
+                AI:{" "}
+                <span className="text-terracotta num">{aiProgress.ai_applied}</span>
+              </span>
+              <span>
+                Skipped:{" "}
+                <span className="text-muted num">{aiProgress.skipped}</span>
+              </span>
+            </div>
+          </div>
+          {aiProgress.total > 0 && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card-hover">
+              <div
+                className="h-full bg-terracotta transition-all"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    (aiProgress.processed / aiProgress.total) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       <ElevatedCard accent={pct >= 95 ? "surplus" : pct >= 75 ? "warning" : "deficit"}>
         <div className="flex flex-wrap items-end justify-between gap-4">

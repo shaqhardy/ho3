@@ -24,7 +24,8 @@ export type AlertType =
   | "debt_milestone"
   | "plaid_reconnect"
   | "category_overspend"
-  | "goal_hit";
+  | "goal_hit"
+  | "statement_available";
 
 let vapidConfigured = false;
 function ensureVapid() {

@@ -473,7 +473,7 @@ function GenerateDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [lookback, setLookback] = useState<1 | 3 | 6 | 12>(3);
+  const [lookback, setLookback] = useState<1 | 3 | 6 | 12>(12);
   const [period, setPeriod] = useState<BudgetPeriodType>("monthly");
   const [roundTo, setRoundTo] = useState<10 | 25 | 50>(25);
   const [loading, setLoading] = useState(false);

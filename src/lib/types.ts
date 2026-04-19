@@ -160,6 +160,23 @@ export interface DebtStatement {
   created_at: string;
 }
 
+export type IncomeClassification =
+  | "external_income"
+  | "owner_distribution"
+  | "internal_transfer";
+
+export const INCOME_CLASSIFICATIONS: readonly IncomeClassification[] = [
+  "external_income",
+  "owner_distribution",
+  "internal_transfer",
+] as const;
+
+export const INCOME_CLASSIFICATION_LABELS: Record<IncomeClassification, string> = {
+  external_income: "External income",
+  owner_distribution: "Owner distribution",
+  internal_transfer: "Internal transfer",
+};
+
 export interface ProjectedIncome {
   id: string;
   book: Book;
@@ -167,7 +184,39 @@ export interface ProjectedIncome {
   amount: number;
   source: string;
   confidence: ConfidenceLevel;
+  classification: IncomeClassification;
+  linked_schedule_id: string | null;
   created_at: string;
+}
+
+export type DistributionCadence =
+  | "weekly"
+  | "biweekly"
+  | "semimonthly"
+  | "monthly"
+  | "custom";
+
+export const DISTRIBUTION_CADENCES: readonly DistributionCadence[] = [
+  "weekly",
+  "biweekly",
+  "semimonthly",
+  "monthly",
+  "custom",
+] as const;
+
+export interface DistributionSchedule {
+  id: string;
+  user_id: string;
+  source_book: Book;
+  target_book: Book;
+  amount: number;
+  cadence: DistributionCadence;
+  anchor_date: string;
+  custom_days: number[] | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type IncomeCategory =
@@ -213,6 +262,7 @@ export interface IncomeEntry {
   linked_transaction_id: string | null;
   linked_plan_item_id: string | null;
   is_confirmed: boolean;
+  classification: IncomeClassification;
   likely_transfer: boolean;
   transfer_match_txn_id: string | null;
   created_at: string;

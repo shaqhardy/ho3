@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PersonalDashboard } from "@/components/personal/dashboard";
+import { CashProjectionSection } from "@/components/cash-projection/cash-projection-section";
 
 export default async function PersonalPage() {
   const supabase = await createClient();
@@ -54,15 +55,25 @@ export default async function PersonalPage() {
       .order("date"),
   ]);
 
+  const hasData =
+    (accounts?.length ?? 0) > 0 ||
+    (transactions?.length ?? 0) > 0 ||
+    (bills?.length ?? 0) > 0 ||
+    (subscriptions?.length ?? 0) > 0 ||
+    (debts?.length ?? 0) > 0;
+
   return (
-    <PersonalDashboard
-      accounts={accounts || []}
-      transactions={transactions || []}
-      bills={bills || []}
-      subscriptions={subscriptions || []}
-      debts={debts || []}
-      categories={categories || []}
-      projectedIncome={projectedIncome || []}
-    />
+    <div className="space-y-6">
+      <CashProjectionSection book="personal" hasData={hasData} />
+      <PersonalDashboard
+        accounts={accounts || []}
+        transactions={transactions || []}
+        bills={bills || []}
+        subscriptions={subscriptions || []}
+        debts={debts || []}
+        categories={categories || []}
+        projectedIncome={projectedIncome || []}
+      />
+    </div>
   );
 }

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { INCOME_CATEGORIES, type IncomeCategory, type Book } from "@/lib/types";
+import {
+  INCOME_CATEGORIES,
+  INCOME_CLASSIFICATIONS,
+  type IncomeCategory,
+  type IncomeClassification,
+  type Book,
+} from "@/lib/types";
 
 interface PatchBody {
   amount?: number;
@@ -8,6 +14,7 @@ interface PatchBody {
   expected_date?: string | null;
   source?: string | null;
   category?: IncomeCategory;
+  classification?: IncomeClassification;
   notes?: string | null;
   account_id?: string | null;
   linked_plan_item_id?: string | null;
@@ -82,6 +89,14 @@ export async function PATCH(
     if (!INCOME_CATEGORIES.includes(body.category))
       return NextResponse.json({ error: "invalid category" }, { status: 400 });
     updates.category = body.category;
+  }
+  if ("classification" in body && body.classification) {
+    if (!INCOME_CLASSIFICATIONS.includes(body.classification))
+      return NextResponse.json(
+        { error: "invalid classification" },
+        { status: 400 }
+      );
+    updates.classification = body.classification;
   }
   if ("notes" in body) updates.notes = body.notes ? body.notes.trim() : null;
   if ("account_id" in body) updates.account_id = body.account_id;

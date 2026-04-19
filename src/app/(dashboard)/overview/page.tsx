@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { OverviewDashboard } from "@/components/overview-dashboard";
+import { CashProjectionSection } from "@/components/cash-projection/cash-projection-section";
 import { fetchAllPaginated } from "@/lib/supabase/paginate";
 import type { MonthlyFlowRow } from "@/components/charts/net-worth-trend";
 import type { IncomeEntry } from "@/lib/types";
@@ -112,17 +113,27 @@ export default async function OverviewPage() {
     ),
   ]);
 
+  const hasData =
+    (accounts?.length ?? 0) > 0 ||
+    (bills?.length ?? 0) > 0 ||
+    (subscriptions?.length ?? 0) > 0 ||
+    (debts?.length ?? 0) > 0 ||
+    (incomeEntries?.length ?? 0) > 0;
+
   return (
-    <OverviewDashboard
-      accounts={accounts || []}
-      bills={bills || []}
-      subscriptions={subscriptions || []}
-      debts={debts || []}
-      recentTransactions={recentTransactions || []}
-      trendsTxns={trendsTxns ?? []}
-      monthlyFlows={(flows ?? []) as MonthlyFlowRow[]}
-      incomeEntries={incomeEntries ?? []}
-      unconfirmedIncome={unconfirmedIncome ?? []}
-    />
+    <div className="space-y-6">
+      <CashProjectionSection book="all" hasData={hasData} />
+      <OverviewDashboard
+        accounts={accounts || []}
+        bills={bills || []}
+        subscriptions={subscriptions || []}
+        debts={debts || []}
+        recentTransactions={recentTransactions || []}
+        trendsTxns={trendsTxns ?? []}
+        monthlyFlows={(flows ?? []) as MonthlyFlowRow[]}
+        incomeEntries={incomeEntries ?? []}
+        unconfirmedIncome={unconfirmedIncome ?? []}
+      />
+    </div>
   );
 }

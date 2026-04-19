@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { INCOME_CATEGORIES, type IncomeCategory, type Book } from "@/lib/types";
+import {
+  INCOME_CATEGORIES,
+  INCOME_CLASSIFICATIONS,
+  type IncomeCategory,
+  type IncomeClassification,
+  type Book,
+} from "@/lib/types";
 
 interface Body {
   category?: IncomeCategory;
   source?: string | null;
+  classification?: IncomeClassification;
 }
 
 export async function POST(
@@ -52,6 +59,14 @@ export async function POST(
   }
   if ("source" in body)
     updates.source = body.source ? body.source.trim() : null;
+  if (body.classification) {
+    if (!INCOME_CLASSIFICATIONS.includes(body.classification))
+      return NextResponse.json(
+        { error: "invalid classification" },
+        { status: 400 }
+      );
+    updates.classification = body.classification;
+  }
 
   const { data, error } = await admin
     .from("income_entries")

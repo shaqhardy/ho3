@@ -10,6 +10,7 @@ import {
 import { currentPeriodRange } from "@/lib/budgets/compute";
 import { generateTuneUpSuggestions } from "@/lib/budgets/suggestions";
 import { syncStatementsForItems } from "@/lib/plaid/statements";
+import { regenerateDistributionProjections } from "@/lib/distribution-schedules/regenerate";
 import type { Book } from "@/lib/types";
 
 // Ensure this runs on Node.js (web-push uses node crypto).
@@ -615,6 +616,20 @@ async function handle(request: NextRequest) {
     console.error("[cron daily] tune-up generation failed", err);
   }
 
+  // Regenerate projected_income rows from active distribution_schedules.
+  // Idempotent: deletes all future linked rows and re-inserts from cadence,
+  // so schedule edits (or deactivations) take effect on the next cron run.
+  let distributions: {
+    active_schedules: number;
+    rows_upserted: number;
+    rows_purged: number;
+  } = { active_schedules: 0, rows_upserted: 0, rows_purged: 0 };
+  try {
+    distributions = await regenerateDistributionProjections(supabase);
+  } catch (err) {
+    console.error("[cron daily] distribution regen failed", err);
+  }
+
   // Final step: pull fresh Plaid statements for every item and upload any new
   // PDFs into the documents bucket. Non-fatal if it errors.
   let statements: { synced: number; downloaded: number } = {
@@ -634,5 +649,5 @@ async function handle(request: NextRequest) {
     console.error("[cron daily] statements sync failed", err);
   }
 
-  return NextResponse.json({ processed, tune_up, statements });
+  return NextResponse.json({ processed, tune_up, distributions, statements });
 }

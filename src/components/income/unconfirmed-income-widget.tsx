@@ -8,7 +8,10 @@ import { formatCurrency, formatShortDate } from "@/lib/format";
 import {
   INCOME_CATEGORIES,
   INCOME_CATEGORY_LABELS,
+  INCOME_CLASSIFICATIONS,
+  INCOME_CLASSIFICATION_LABELS,
   type IncomeCategory,
+  type IncomeClassification,
   type IncomeEntry,
   type Book,
 } from "@/lib/types";
@@ -33,6 +36,9 @@ export function UnconfirmedIncomeWidget({
   const [pendingCat, setPendingCat] = useState<
     Record<string, IncomeCategory | undefined>
   >({});
+  const [pendingClass, setPendingClass] = useState<
+    Record<string, IncomeClassification | undefined>
+  >({});
   const [err, setErr] = useState<string | null>(null);
 
   if (entries.length === 0) return null;
@@ -42,10 +48,12 @@ export function UnconfirmedIncomeWidget({
     setErr(null);
     try {
       const category = pendingCat[entry.id] ?? entry.category;
+      const classification =
+        pendingClass[entry.id] ?? entry.classification;
       const res = await fetch(`/api/income/${entry.id}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category }),
+        body: JSON.stringify({ category, classification }),
       });
       if (!res.ok) {
         const b = (await res.json().catch(() => ({}))) as { error?: string };
@@ -107,6 +115,7 @@ export function UnconfirmedIncomeWidget({
           const acct = e.account_id ? accountsById[e.account_id] : null;
           const date = e.received_date ?? e.expected_date ?? e.created_at;
           const cat = pendingCat[e.id] ?? e.category;
+          const cls = pendingClass[e.id] ?? e.classification;
           const busy = busyId === e.id;
           return (
             <li
@@ -153,10 +162,29 @@ export function UnconfirmedIncomeWidget({
                   }
                   className={inputCls}
                   disabled={busy}
+                  title="Category"
                 >
                   {INCOME_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {INCOME_CATEGORY_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={cls}
+                  onChange={(ev) =>
+                    setPendingClass((p) => ({
+                      ...p,
+                      [e.id]: ev.target.value as IncomeClassification,
+                    }))
+                  }
+                  className={inputCls}
+                  disabled={busy}
+                  title="Classification"
+                >
+                  {INCOME_CLASSIFICATIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {INCOME_CLASSIFICATION_LABELS[c]}
                     </option>
                   ))}
                 </select>

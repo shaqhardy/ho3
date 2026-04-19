@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BookDashboard } from "@/components/book-dashboard";
+import { CashProjectionSection } from "@/components/cash-projection/cash-projection-section";
 
 export default async function BusinessPage() {
   const supabase = await createClient();
@@ -40,14 +41,22 @@ export default async function BusinessPage() {
       .order("name"),
   ]);
 
+  const hasData =
+    (accounts?.length ?? 0) > 0 ||
+    (transactions?.length ?? 0) > 0 ||
+    (subscriptions?.length ?? 0) > 0;
+
   return (
-    <BookDashboard
-      book="business"
-      bookLabel="Business"
-      accounts={accounts || []}
-      transactions={transactions || []}
-      subscriptions={subscriptions || []}
-      categories={categories || []}
-    />
+    <div className="space-y-6">
+      <CashProjectionSection book="business" hasData={hasData} />
+      <BookDashboard
+        book="business"
+        bookLabel="Business"
+        accounts={accounts || []}
+        transactions={transactions || []}
+        subscriptions={subscriptions || []}
+        categories={categories || []}
+      />
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PlanView } from "@/components/personal/plan-view";
+import { DistributionScheduleManager } from "@/components/plan/distribution-schedule-manager";
 import type { Scenario } from "@/lib/projection/engine";
 import { getBudgetContextForPlan } from "@/lib/budgets/plan-integration";
 import type {
@@ -108,17 +109,20 @@ export default async function PlanPage() {
   );
 
   return (
-    <PlanView
-      accounts={accounts || []}
-      bills={bills || []}
-      subscriptions={subscriptions || []}
-      debts={debts || []}
-      projectedIncome={projectedIncome || []}
-      planOverrides={planOverrides || []}
-      userId={user.id}
-      scenarios={scenarios}
-      budgetContext={budgetContext}
-      incomeEntries={incomeEntries}
-    />
+    <div className="space-y-6">
+      <PlanView
+        accounts={accounts || []}
+        bills={bills || []}
+        subscriptions={subscriptions || []}
+        debts={debts || []}
+        projectedIncome={projectedIncome || []}
+        planOverrides={planOverrides || []}
+        userId={user.id}
+        scenarios={scenarios}
+        budgetContext={budgetContext}
+        incomeEntries={incomeEntries}
+      />
+      <DistributionScheduleManager />
+    </div>
   );
 }

@@ -13,6 +13,7 @@ import type {
   ProjectedIncome,
   PlanOverride,
   PriorityTier,
+  IncomeEntry,
 } from "@/lib/types";
 import {
   computeProjection,
@@ -20,9 +21,16 @@ import {
   type Scenario,
 } from "@/lib/projection/engine";
 import { WhatIfBadge, WhatIfPanel } from "@/components/whatif-view";
-import { AlertTriangle, CheckCircle, ArrowDown, ArrowUp } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  ArrowDown,
+  ArrowUp,
+  PlusCircle,
+} from "lucide-react";
 import type { BudgetPlanContext } from "@/lib/budgets/plan-integration";
 import { CashflowProjectionChart } from "@/components/charts/cashflow-projection";
+import { AddIncomeDialog } from "@/components/income/add-income-dialog";
 
 interface Props {
   accounts: Account[];
@@ -34,6 +42,7 @@ interface Props {
   userId: string;
   scenarios?: Scenario[];
   budgetContext?: BudgetPlanContext;
+  incomeEntries?: IncomeEntry[];
 }
 
 const STORAGE_KEY = "ho3-plan-include-whatif";
@@ -48,7 +57,40 @@ export function PlanView({
   userId,
   scenarios: initialScenarios,
   budgetContext,
+  incomeEntries = [],
 }: Props) {
+  // Map projected_income.id → { total, count } of logged actual income.
+  const actualByPlanId = useMemo(() => {
+    const m = new Map<string, { total: number; count: number }>();
+    for (const e of incomeEntries) {
+      if (!e.linked_plan_item_id) continue;
+      const prev = m.get(e.linked_plan_item_id) ?? { total: 0, count: 0 };
+      prev.total += Number(e.amount);
+      prev.count += 1;
+      m.set(e.linked_plan_item_id, prev);
+    }
+    return m;
+  }, [incomeEntries]);
+
+  // Accounts for the Log Actual dialog — personal only (Plan is personal).
+  const incomeDialogAccounts = useMemo(
+    () =>
+      accounts
+        .filter((a) => a.book === "personal")
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          mask: a.mask,
+          book: a.book,
+        })),
+    [accounts]
+  );
+
+  const [logActualFor, setLogActualFor] = useState<{
+    planItemId: string;
+    amount: number;
+    source: string | null;
+  } | null>(null);
   const router = useRouter();
   const [localOverrides, setLocalOverrides] = useState<
     Map<string, PriorityTier>
@@ -429,7 +471,16 @@ export function PlanView({
               </div>
 
               {/* Income */}
-              {entry.income.map((inc) => (
+              {entry.income.map((inc) => {
+                const canLogActual =
+                  !inc.isHypothetical && inc.type === "income";
+                const actual = canLogActual
+                  ? actualByPlanId.get(inc.sourceId)
+                  : undefined;
+                const variance = actual
+                  ? actual.total - inc.amount
+                  : 0;
+                return (
                 <div
                   key={inc.id}
                   className="flex items-center justify-between py-1 text-sm"
@@ -459,12 +510,42 @@ export function PlanView({
                         {inc.confidence}
                       </span>
                     )}
+                    {actual && (
+                      <span
+                        className={`text-[10px] px-1 rounded ${
+                          variance >= 0
+                            ? "bg-surplus/10 text-surplus"
+                            : "bg-deficit/10 text-deficit"
+                        }`}
+                        title={`Logged ${formatCurrency(actual.total)} of expected ${formatCurrency(inc.amount)}`}
+                      >
+                        Actual {formatCurrency(actual.total)}{" "}
+                        {variance >= 0 ? "↑" : "↓"}
+                        {formatCurrency(Math.abs(variance))}
+                      </span>
+                    )}
+                    {canLogActual && !actual && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLogActualFor({
+                            planItemId: inc.sourceId,
+                            amount: inc.amount,
+                            source: inc.name,
+                          })
+                        }
+                        className="inline-flex items-center gap-0.5 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] font-medium text-muted hover:border-terracotta hover:text-terracotta"
+                      >
+                        <PlusCircle className="h-2.5 w-2.5" /> Log Actual
+                      </button>
+                    )}
                   </div>
                   <span className="text-surplus font-medium shrink-0">
                     +{formatCurrency(inc.amount)}
                   </span>
                 </div>
-              ))}
+                );
+              })}
 
               {/* Expenses */}
               {entry.expenses.map((item) => (
@@ -529,6 +610,23 @@ export function PlanView({
           )}
         </div>
       </div>
+
+      <AddIncomeDialog
+        open={logActualFor !== null}
+        onClose={() => setLogActualFor(null)}
+        accounts={incomeDialogAccounts}
+        availableBooks={["personal"]}
+        defaults={
+          logActualFor
+            ? {
+                book: "personal",
+                amount: logActualFor.amount,
+                source: logActualFor.source,
+                linkedPlanItemId: logActualFor.planItemId,
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

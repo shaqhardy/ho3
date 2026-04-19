@@ -6,6 +6,7 @@ import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
 import { syncStatementsForItems } from "@/lib/plaid/statements";
 import { aiCategorizeFreshTxns } from "@/lib/ai/sync-hook";
 import { autoMatchBillForTransaction } from "@/lib/bills/auto-match";
+import { enqueueUnconfirmedIncome } from "@/lib/income/detect-transfer";
 import { sendPushToUser } from "@/lib/push/send";
 import {
   buildLargeTxnPush,
@@ -276,6 +277,22 @@ export async function POST() {
 
         const txnId = upserted?.id ?? null;
         if (txnId && !categoryId) newlyAddedTxnIds.push(txnId);
+
+        // Queue unconfirmed income for credits. Idempotent via unique
+        // constraint on linked_transaction_id; already-confirmed entries are
+        // preserved across re-syncs.
+        if (txnId && isIncome) {
+          await enqueueUnconfirmedIncome(adminSupabase, {
+            userId: item.user_id,
+            book,
+            accountId,
+            transactionId: txnId,
+            amount: absAmount,
+            date: txn.date,
+            merchant: txn.merchant_name || txn.name || null,
+            pfcPrimary: txn.personal_finance_category?.primary ?? null,
+          });
+        }
 
         // Auto-create category rule if merchant is new
         if (categoryId && txn.merchant_name) {

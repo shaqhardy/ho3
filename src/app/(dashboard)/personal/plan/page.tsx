@@ -3,7 +3,14 @@ import { redirect } from "next/navigation";
 import { PlanView } from "@/components/personal/plan-view";
 import type { Scenario } from "@/lib/projection/engine";
 import { getBudgetContextForPlan } from "@/lib/budgets/plan-integration";
-import type { Transaction, Budget, BudgetCategory, Category } from "@/lib/types";
+import type {
+  Transaction,
+  Budget,
+  BudgetCategory,
+  Category,
+  IncomeEntry,
+} from "@/lib/types";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
 
 export default async function PlanPage() {
   const supabase = await createClient();
@@ -23,6 +30,7 @@ export default async function PlanPage() {
     { data: projectedIncome },
     { data: planOverrides },
     scenariosRes,
+    incomeEntries,
   ] = await Promise.all([
     supabase
       .from("accounts")
@@ -51,6 +59,17 @@ export default async function PlanPage() {
     supabase.from("plan_overrides").select("*").eq("user_id", user.id),
     // Scenarios table may or may not exist yet — tolerate errors gracefully.
     supabase.from("scenarios").select("*").eq("book", "personal"),
+    // Actual income tied to a Plan line — used to render the variance chip
+    // next to each expected income row.
+    fetchAllPaginated<IncomeEntry>((from, to) =>
+      supabase
+        .from("income_entries")
+        .select("*")
+        .eq("book", "personal")
+        .not("linked_plan_item_id", "is", null)
+        .order("received_date", { ascending: false })
+        .range(from, to)
+    ),
   ]);
 
   const scenarios = (scenariosRes?.data ?? []) as Scenario[];
@@ -99,6 +118,7 @@ export default async function PlanPage() {
       userId={user.id}
       scenarios={scenarios}
       budgetContext={budgetContext}
+      incomeEntries={incomeEntries}
     />
   );
 }

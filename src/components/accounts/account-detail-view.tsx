@@ -44,13 +44,16 @@ import {
   formatYmdMonth,
   type ExtraPayment,
 } from "@/lib/finance/amortization";
-import type { Book } from "@/lib/types";
+import type { Book, IncomeEntry } from "@/lib/types";
 import type {
   DebtRecord,
   SnapshotRecord,
   StatementRecord,
   TransactionRecord,
 } from "@/components/accounts/account-detail-types";
+import { IncomeSection } from "@/components/income/income-section";
+import { IncomeList } from "@/components/income/income-list";
+import { UnconfirmedIncomeWidget } from "@/components/income/unconfirmed-income-widget";
 
 // Statements tab is built by a sibling feature. If that component isn't live
 // yet in this build we silently fall back to the shim below so the route
@@ -58,7 +61,12 @@ import type {
 import ExternalStatementsTab from "@/components/accounts/statements-tab";
 import type { AccountStatement } from "@/lib/types";
 
-type TabId = "overview" | "transactions" | "statements" | "insights";
+type TabId =
+  | "overview"
+  | "transactions"
+  | "income"
+  | "statements"
+  | "insights";
 
 interface AccountSummary {
   id: string;
@@ -80,6 +88,8 @@ interface Props {
   debt: DebtRecord | null;
   statements: StatementRecord[];
   snapshots: SnapshotRecord[];
+  incomeEntries?: IncomeEntry[];
+  unconfirmedIncome?: IncomeEntry[];
 }
 
 // ---------- helpers ----------------------------------------------------------
@@ -112,6 +122,8 @@ export function AccountDetailView({
   debt,
   statements,
   snapshots,
+  incomeEntries = [],
+  unconfirmedIncome = [],
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>("overview");
@@ -171,6 +183,13 @@ export function AccountDetailView({
       {tab === "transactions" && (
         <TransactionsTab transactions={effectiveTxns} />
       )}
+      {tab === "income" && (
+        <IncomeTab
+          account={account}
+          entries={incomeEntries}
+          unconfirmed={unconfirmedIncome}
+        />
+      )}
       {tab === "statements" && showStatementsTab && (
         <StatementsShim accountId={account.id} statements={statements} />
       )}
@@ -182,6 +201,60 @@ export function AccountDetailView({
           debt={debt}
         />
       )}
+    </div>
+  );
+}
+
+// ---------- income tab -------------------------------------------------------
+
+function IncomeTab({
+  account,
+  entries,
+  unconfirmed,
+}: {
+  account: AccountSummary;
+  entries: IncomeEntry[];
+  unconfirmed: IncomeEntry[];
+}) {
+  const incomeAccounts = [
+    {
+      id: account.id,
+      name: account.name,
+      mask: account.mask,
+      book: account.book,
+    },
+  ];
+  const accountsById = {
+    [account.id]: { name: account.name, mask: account.mask },
+  };
+  return (
+    <div className="space-y-6">
+      <IncomeSection
+        entries={entries}
+        accounts={incomeAccounts}
+        availableBooks={[account.book]}
+        scopedBook={account.book}
+        title={`${account.nickname || account.name} · Income`}
+        addIncomeDefaults={{
+          book: account.book,
+          accountId: account.id,
+        }}
+      />
+      {unconfirmed.length > 0 && (
+        <UnconfirmedIncomeWidget
+          entries={unconfirmed}
+          accountsById={accountsById}
+          title="Pending from Plaid"
+        />
+      )}
+      <IncomeList
+        entries={entries}
+        accounts={incomeAccounts}
+        availableBooks={[account.book]}
+        accountsById={accountsById}
+        title="Recent income · last 20"
+        limit={20}
+      />
     </div>
   );
 }
@@ -328,6 +401,7 @@ function Tabs({
   const items: Array<{ id: TabId; label: string; visible: boolean }> = [
     { id: "overview", label: "Overview", visible: true },
     { id: "transactions", label: "Transactions", visible: true },
+    { id: "income", label: "Income", visible: true },
     { id: "statements", label: "Statements", visible: showStatements },
     { id: "insights", label: "Insights", visible: showInsights },
   ];

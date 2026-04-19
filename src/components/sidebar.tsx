@@ -14,6 +14,7 @@ import {
   X,
   Settings,
   Landmark,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -190,6 +191,25 @@ export function Sidebar({ profile }: { profile: Profile }) {
             </div>
           );
         })}
+
+        {/* Cross-book Income tab — visible to anyone with at least one
+            allowed book, since income is per-book and RLS scopes the view. */}
+        {profile.allowed_books.length > 0 && (
+          <div className="px-3 pb-1">
+            <Link
+              href="/income"
+              onClick={() => setOpen(false)}
+              className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                pathname.startsWith("/income")
+                  ? "bg-terracotta/10 text-terracotta"
+                  : "text-muted hover:bg-card-hover hover:text-foreground"
+              }`}
+            >
+              <TrendingUp className="h-5 w-5" />
+              Income
+            </Link>
+          </div>
+        )}
 
         {/* Accounts + Settings */}
         {profile.role === "admin" && (

@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
+
+type TxnRow = {
+  id: string;
+  date: string;
+  amount: number | string;
+};
 
 // Auto-match business→personal transfers
 export async function POST() {
@@ -18,33 +25,34 @@ export async function POST() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Get recent business expenses that look like owner pay
-  const { data: businessTxns } = await adminSupabase
-    .from("transactions")
-    .select("*")
-    .eq("book", "business")
-    .eq("is_income", false)
-    .gte(
-      "date",
-      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0]
-    )
-    .order("date", { ascending: false });
+  const since90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
 
-  // Get recent personal income
-  const { data: personalTxns } = await adminSupabase
-    .from("transactions")
-    .select("*")
-    .eq("book", "personal")
-    .eq("is_income", true)
-    .gte(
-      "date",
-      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0]
-    )
-    .order("date", { ascending: false });
+  // Paginated — heavy months can push either side past 1000 rows, and
+  // missing matches here cause silent bridge_link gaps.
+  const [businessTxns, personalTxns] = await Promise.all([
+    fetchAllPaginated<TxnRow>((from, to) =>
+      adminSupabase
+        .from("transactions")
+        .select("*")
+        .eq("book", "business")
+        .eq("is_income", false)
+        .gte("date", since90)
+        .order("date", { ascending: false })
+        .range(from, to)
+    ),
+    fetchAllPaginated<TxnRow>((from, to) =>
+      adminSupabase
+        .from("transactions")
+        .select("*")
+        .eq("book", "personal")
+        .eq("is_income", true)
+        .gte("date", since90)
+        .order("date", { ascending: false })
+        .range(from, to)
+    ),
+  ]);
 
   // Get existing bridge links to avoid duplicates
   const { data: existingLinks } = await adminSupabase
@@ -60,14 +68,14 @@ export async function POST() {
 
   let matched = 0;
 
-  for (const bizTxn of businessTxns || []) {
+  for (const bizTxn of businessTxns) {
     if (linkedBiz.has(bizTxn.id)) continue;
 
     // Look for matching personal income within 3-day window
     const bizDate = new Date(bizTxn.date + "T00:00:00");
     const bizAmount = Number(bizTxn.amount);
 
-    for (const perTxn of personalTxns || []) {
+    for (const perTxn of personalTxns) {
       if (linkedPer.has(perTxn.id)) continue;
 
       const perDate = new Date(perTxn.date + "T00:00:00");

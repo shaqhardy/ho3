@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
 
 // GET /api/accounts/[id]/balance-history
 //
@@ -56,13 +57,19 @@ export async function GET(
     });
   }
 
-  // Fallback: derive from transactions.
-  const { data: txns } = await admin
-    .from("transactions")
-    .select("date, amount, is_income")
-    .eq("account_id", id)
-    .gte("date", sinceYmd)
-    .order("date", { ascending: true });
+  // Fallback: derive from transactions. Paginated — a primary checking
+  // account easily exceeds 1000 txns per year, which used to truncate the
+  // reverse walk and produce a wrong trend line.
+  type TxnRow = { date: string; amount: number | string; is_income: boolean };
+  const txns = await fetchAllPaginated<TxnRow>((from, to) =>
+    admin
+      .from("transactions")
+      .select("date, amount, is_income")
+      .eq("account_id", id)
+      .gte("date", sinceYmd)
+      .order("date", { ascending: true })
+      .range(from, to)
+  );
 
   const liability = account.type === "credit" || account.type === "loan";
   const current = liability
@@ -72,7 +79,7 @@ export async function GET(
   // Build a per-day delta map, then walk backwards from today to fabricate
   // the series.
   const deltaByDay = new Map<string, number>();
-  for (const t of txns ?? []) {
+  for (const t of txns) {
     const amt = Math.abs(Number(t.amount ?? 0));
     const delta = liability
       ? t.is_income

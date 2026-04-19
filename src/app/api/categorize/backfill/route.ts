@@ -6,6 +6,7 @@ import {
   type CategorizeInputTxn,
   type CategoryHint,
 } from "@/lib/ai/categorize";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
 
 export const runtime = "nodejs";
 // Long-running; disable static optimization & default edge body buffering.
@@ -56,15 +57,18 @@ export async function POST() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Target rows: category_id null, OR current category name is "Other".
-  // Supabase can't do a join-filter through the select nicely, so we do two
-  // passes and union their ids.
-  const { data: uncat } = await admin
-    .from("transactions")
-    .select(
-      "id, book, merchant, description, amount, date, pfc_primary, pfc_detailed, is_income, category_id, categories(name)"
-    )
-    .is("category_id", null)
-    .order("date", { ascending: false });
+  // Paginated — a backfill run commonly sweeps >1000 stale rows, and
+  // missing rows here means they stay uncategorized forever.
+  const uncat = await fetchAllPaginated<TxnRow>((from, to) =>
+    admin
+      .from("transactions")
+      .select(
+        "id, book, merchant, description, amount, date, pfc_primary, pfc_detailed, is_income, category_id, categories(name)"
+      )
+      .is("category_id", null)
+      .order("date", { ascending: false })
+      .range(from, to)
+  );
 
   // "Other" categories — fetch ids so we can filter transactions by them.
   const { data: otherCats } = await admin
@@ -75,20 +79,19 @@ export async function POST() {
 
   let otherTxns: TxnRow[] = [];
   if (otherIds.length > 0) {
-    const { data } = await admin
-      .from("transactions")
-      .select(
-        "id, book, merchant, description, amount, date, pfc_primary, pfc_detailed, is_income, category_id, categories(name)"
-      )
-      .in("category_id", otherIds)
-      .order("date", { ascending: false });
-    otherTxns = (data ?? []) as unknown as TxnRow[];
+    otherTxns = await fetchAllPaginated<TxnRow>((from, to) =>
+      admin
+        .from("transactions")
+        .select(
+          "id, book, merchant, description, amount, date, pfc_primary, pfc_detailed, is_income, category_id, categories(name)"
+        )
+        .in("category_id", otherIds)
+        .order("date", { ascending: false })
+        .range(from, to)
+    );
   }
 
-  const all: TxnRow[] = [
-    ...((uncat ?? []) as unknown as TxnRow[]),
-    ...otherTxns,
-  ];
+  const all: TxnRow[] = [...uncat, ...otherTxns];
   // Dedupe
   const byId = new Map<string, TxnRow>();
   for (const r of all) byId.set(r.id, r);

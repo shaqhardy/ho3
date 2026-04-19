@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { plaidFetch } from "@/lib/plaid/api";
 import { syncLiabilities } from "@/lib/plaid/sync-liabilities";
 import { autoMatchBillForTransaction } from "@/lib/bills/auto-match";
+import { enqueueUnconfirmedIncome } from "@/lib/income/detect-transfer";
 
 type Book = "personal" | "business" | "nonprofit";
 
@@ -149,6 +150,21 @@ export async function syncPlaidItemNow(
           book,
           isIncome
         );
+      }
+
+      // Queue unconfirmed income for credits. Never auto-suppresses transfers
+      // — detection flags likely_transfer so Shaq can dismiss in the widget.
+      if (upserted?.id && isIncome) {
+        await enqueueUnconfirmedIncome(admin, {
+          userId: item.user_id,
+          book,
+          accountId: acct?.id ?? null,
+          transactionId: upserted.id,
+          amount: absAmount,
+          date: t.date,
+          merchant: t.merchant_name || t.name || null,
+          pfcPrimary: t.personal_finance_category?.primary ?? null,
+        });
       }
     }
 

@@ -7,7 +7,8 @@ import type {
   StatementRecord,
   TransactionRecord,
 } from "@/components/accounts/account-detail-types";
-import type { Book } from "@/lib/types";
+import type { Book, IncomeEntry } from "@/lib/types";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
 
 export const dynamic = "force-dynamic";
 
@@ -61,12 +62,19 @@ export default async function AccountDetailPage({ params }: PageProps) {
   since365d.setDate(since365d.getDate() - 365);
   const since365dYmd = since365d.toISOString().slice(0, 10);
 
+  const incomeSince = new Date();
+  incomeSince.setMonth(incomeSince.getMonth() - 11);
+  incomeSince.setDate(1);
+  const incomeSinceYmd = incomeSince.toISOString().slice(0, 10);
+
   const [
     { data: institution },
     { data: transactions },
     { data: debt },
     { data: statements },
     { data: snapshots },
+    incomeEntries,
+    unconfirmedIncome,
   ] = await Promise.all([
     account.plaid_item_id
       ? admin
@@ -99,6 +107,26 @@ export default async function AccountDetailPage({ params }: PageProps) {
       .gte("snapshot_date", since365dYmd)
       .order("snapshot_date", { ascending: true })
       .limit(500),
+    fetchAllPaginated<IncomeEntry>((from, to) =>
+      admin
+        .from("income_entries")
+        .select("*")
+        .eq("account_id", id)
+        .eq("is_confirmed", true)
+        .gte("received_date", incomeSinceYmd)
+        .order("received_date", { ascending: false })
+        .range(from, to)
+    ),
+    fetchAllPaginated<IncomeEntry>((from, to) =>
+      admin
+        .from("income_entries")
+        .select("*")
+        .eq("account_id", id)
+        .eq("is_confirmed", false)
+        .order("received_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(from, to)
+    ),
   ]);
 
   return (
@@ -123,6 +151,8 @@ export default async function AccountDetailPage({ params }: PageProps) {
       debt={(debt as DebtRecord | null) ?? null}
       statements={(statements ?? []) as StatementRecord[]}
       snapshots={(snapshots ?? []) as SnapshotRecord[]}
+      incomeEntries={incomeEntries}
+      unconfirmedIncome={unconfirmedIncome}
     />
   );
 }

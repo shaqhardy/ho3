@@ -170,6 +170,55 @@ export interface ProjectedIncome {
   created_at: string;
 }
 
+export type IncomeCategory =
+  | "consulting"
+  | "speaking"
+  | "royalties"
+  | "product"
+  | "refund"
+  | "gift"
+  | "other";
+
+export const INCOME_CATEGORIES: readonly IncomeCategory[] = [
+  "consulting",
+  "speaking",
+  "royalties",
+  "product",
+  "refund",
+  "gift",
+  "other",
+] as const;
+
+export const INCOME_CATEGORY_LABELS: Record<IncomeCategory, string> = {
+  consulting: "Consulting",
+  speaking: "Speaking",
+  royalties: "Royalties",
+  product: "Product Sales",
+  refund: "Refund",
+  gift: "Gift",
+  other: "Other",
+};
+
+export interface IncomeEntry {
+  id: string;
+  user_id: string;
+  book: Book;
+  account_id: string | null;
+  amount: number;
+  received_date: string | null;
+  expected_date: string | null;
+  source: string | null;
+  category: IncomeCategory;
+  notes: string | null;
+  linked_transaction_id: string | null;
+  linked_plan_item_id: string | null;
+  is_confirmed: boolean;
+  likely_transfer: boolean;
+  transfer_match_txn_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BridgeLink {
   id: string;
   business_transaction_id: string;

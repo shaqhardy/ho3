@@ -27,8 +27,14 @@ import {
 import { EmptyState, EmptyStateBanner } from "@/components/empty-state";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { BOOK_LABELS } from "@/lib/books";
-import { NetWorthTrend } from "@/components/charts/net-worth-trend";
+import {
+  NetWorthTrend,
+  type MonthlyFlowRow,
+} from "@/components/charts/net-worth-trend";
 import { CategoryDonut } from "@/components/charts/category-donut";
+import { IncomeSection } from "@/components/income/income-section";
+import { UnconfirmedIncomeWidget } from "@/components/income/unconfirmed-income-widget";
+import type { IncomeEntry } from "@/lib/types";
 import {
   netWorth as computeNetWorth,
   totalAssets as computeTotalAssets,
@@ -92,6 +98,9 @@ interface Props {
   debts: Debt[];
   recentTransactions: Transaction[];
   trendsTxns?: OverviewTrendsTxn[];
+  monthlyFlows?: MonthlyFlowRow[];
+  incomeEntries?: IncomeEntry[];
+  unconfirmedIncome?: IncomeEntry[];
 }
 
 export function OverviewDashboard({
@@ -101,7 +110,20 @@ export function OverviewDashboard({
   debts,
   recentTransactions,
   trendsTxns = [],
+  monthlyFlows = [],
+  incomeEntries = [],
+  unconfirmedIncome = [],
 }: Props) {
+  const incomeAccounts = accounts.map((a) => ({
+    id: a.id,
+    name: a.name,
+    mask: a.mask,
+    book: a.book,
+  }));
+  const accountsById: Record<string, { name: string; mask: string | null }> = {};
+  for (const a of accounts) {
+    accountsById[a.id] = { name: a.name, mask: a.mask };
+  }
   // Fully empty state: no accounts and no transactions (owned by Agent E)
   if (accounts.length === 0 && recentTransactions.length === 0) {
     return (
@@ -275,6 +297,19 @@ export function OverviewDashboard({
 
       {sparseBanner}
 
+      <IncomeSection
+        entries={incomeEntries}
+        accounts={incomeAccounts}
+        availableBooks={["personal", "business", "nonprofit"]}
+      />
+
+      {unconfirmedIncome.length > 0 && (
+        <UnconfirmedIncomeWidget
+          entries={unconfirmedIncome}
+          accountsById={accountsById}
+        />
+      )}
+
       {/* What If quick-link (cross-book) */}
       <section>
         <Link href="/overview/whatif" className="group block">
@@ -414,7 +449,7 @@ export function OverviewDashboard({
       </section>
 
       {/* Cross-book charts */}
-      {trendsTxns.length > 0 && (
+      {(monthlyFlows.length > 0 || trendsTxns.length > 0) && (
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="label-sm">Insights</h2>
@@ -422,17 +457,23 @@ export function OverviewDashboard({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <NetWorthTrend
-                accounts={accounts as Parameters<typeof NetWorthTrend>[0]["accounts"]}
-                transactions={trendsTxns as Parameters<typeof NetWorthTrend>[0]["transactions"]}
+                accounts={
+                  accounts as Parameters<typeof NetWorthTrend>[0]["accounts"]
+                }
+                monthlyFlows={monthlyFlows}
                 months={12}
               />
             </Card>
             <Card>
               <CategoryDonut
-                transactions={(trendsTxns.map((t) => ({
-                  ...t,
-                  categories: null,
-                })) as unknown) as Parameters<typeof CategoryDonut>[0]["transactions"]}
+                transactions={
+                  trendsTxns.map((t) => ({
+                    ...t,
+                    categories: null,
+                  })) as unknown as Parameters<
+                    typeof CategoryDonut
+                  >[0]["transactions"]
+                }
               />
             </Card>
           </div>

@@ -76,14 +76,6 @@ interface AccountRow {
   available_balance: number | string | null;
 }
 
-interface TransactionRow {
-  book: Book;
-  amount: number | string;
-  is_income: boolean;
-  date: string;
-  category_id?: string | null;
-}
-
 // ---- Date helpers (Pacific time) --------------------------------------------
 
 const PACIFIC_TZ = "America/Los_Angeles";
@@ -325,7 +317,8 @@ async function handle(request: NextRequest) {
 
       // 3. Daily summary
       if (prefs.daily_summary) {
-        const [upcomingBillsRes, accountsRes, txRes] = await Promise.all([
+        const monthStartYmd = today.slice(0, 7) + "-01";
+        const [upcomingBillsRes, accountsRes, flowsRes] = await Promise.all([
           supabase
             .from("bills")
             .select("id, amount, due_date, status")
@@ -337,17 +330,22 @@ async function handle(request: NextRequest) {
             .from("accounts")
             .select("book, type, current_balance, available_balance")
             .in("book", allowed),
-          supabase
-            .from("transactions")
-            .select("book, amount, is_income, date")
-            .in("book", allowed)
-            .gte("date", today.slice(0, 7) + "-01")
-            .lte("date", today),
+          // Aggregated MTD via RPC — previously pulled rows and summed in JS,
+          // which silently truncated at 1000 for heavy months.
+          supabase.rpc("monthly_flows", {
+            p_books: allowed,
+            p_since: monthStartYmd,
+          }),
         ]);
 
         const upcomingBills = (upcomingBillsRes.data ?? []) as BillRow[];
         const accounts = (accountsRes.data ?? []) as AccountRow[];
-        const tx = (txRes.data ?? []) as TransactionRow[];
+        const flows = (flowsRes.data ?? []) as Array<{
+          book: Book;
+          year_month: string;
+          income_total: number | string;
+          expense_total: number | string;
+        }>;
 
         // Daily summary cash: depository only. Never include credit/loan.
         const totalCash = accounts
@@ -359,10 +357,9 @@ async function handle(request: NextRequest) {
           );
         let mtdIncome = 0;
         let mtdExpense = 0;
-        for (const t of tx) {
-          const amt = Number(t.amount);
-          if (t.is_income) mtdIncome += amt;
-          else mtdExpense += amt;
+        for (const row of flows) {
+          mtdIncome += Number(row.income_total);
+          mtdExpense += Number(row.expense_total);
         }
         const mtdNet = mtdIncome - mtdExpense;
         const netLabel = mtdNet >= 0 ? "surplus" : "deficit";
@@ -492,27 +489,29 @@ async function handle(request: NextRequest) {
           const periodStart = formatISODate(range.start);
           const periodEnd = formatISODate(range.end);
 
-          const [{ data: bcats }, { data: txs }] = await Promise.all([
+          const [{ data: bcats }, { data: catRows }] = await Promise.all([
             supabase
               .from("budget_categories")
               .select("id, budget_id, category_id, allocated_amount")
               .eq("budget_id", b.id),
-            supabase
-              .from("transactions")
-              .select("amount, category_id, is_income, book, date")
-              .eq("book", b.book)
-              .eq("is_income", false)
-              .gte("date", periodStart)
-              .lte("date", periodEnd),
+            // Aggregated per-category spend via RPC. Previously looped every
+            // period txn row, which capped at 1000 for long periods.
+            supabase.rpc("category_txn_counts", {
+              p_books: [b.book],
+              p_from: periodStart,
+              p_to: periodEnd,
+            }),
           ]);
 
           const spentByCat = new Map<string, number>();
-          for (const t of (txs ?? []) as TransactionRow[]) {
-            if (!t.category_id) continue;
-            const amt = Math.abs(Number(t.amount));
+          for (const row of (catRows ?? []) as Array<{
+            category_id: string | null;
+            expense_total: number | string;
+          }>) {
+            if (!row.category_id) continue;
             spentByCat.set(
-              t.category_id,
-              (spentByCat.get(t.category_id) ?? 0) + amt
+              row.category_id,
+              Math.abs(Number(row.expense_total))
             );
           }
 

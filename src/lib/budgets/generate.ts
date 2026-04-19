@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Book, BudgetPeriodType } from "@/lib/types";
+import { fetchAllPaginated } from "@/lib/supabase/paginate";
 
 export interface GenerateInput {
   book: Book;
@@ -115,17 +116,6 @@ export async function generateBudget(
   const lookbackFrom = iso(fromDate);
   const lookbackTo = iso(toDate);
 
-  const { data: rows } = await admin
-    .from("transactions")
-    .select(
-      "id, book, date, amount, category_id, is_income, pfc_primary, pfc_detailed, split_parent_id, categories(id, name)"
-    )
-    .eq("book", input.book)
-    .eq("is_income", false)
-    .gte("date", lookbackFrom)
-    .lte("date", lookbackTo)
-    .not("category_id", "is", null);
-
   type Row = {
     id: string;
     date: string;
@@ -137,10 +127,28 @@ export async function generateBudget(
     categories: { id: string; name: string } | null;
   };
 
+  // Up to lookback_months of expense rows — long lookbacks easily exceed the
+  // 1000-row cap, which used to silently drop tail months and under-estimate
+  // budgets.
+  const rows = await fetchAllPaginated<Row>((from, to) =>
+    admin
+      .from("transactions")
+      .select(
+        "id, book, date, amount, category_id, is_income, pfc_primary, pfc_detailed, split_parent_id, categories(id, name)"
+      )
+      .eq("book", input.book)
+      .eq("is_income", false)
+      .gte("date", lookbackFrom)
+      .lte("date", lookbackTo)
+      .not("category_id", "is", null)
+      .order("date", { ascending: true })
+      .range(from, to)
+  );
+
   // When a transaction has been split, the parent still sits in the table but
   // the children carry the real categorization. Filter the parents out.
   const childParents = new Set<string>();
-  for (const r of (rows ?? []) as unknown as Row[]) {
+  for (const r of rows as unknown as Row[]) {
     if (r.split_parent_id) childParents.add(r.split_parent_id);
   }
 

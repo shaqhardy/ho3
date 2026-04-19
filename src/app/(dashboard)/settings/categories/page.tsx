@@ -26,7 +26,7 @@ export default async function CategoriesSettingsPage() {
       ? ["personal", "business", "nonprofit"]
       : ((profile.allowed_books ?? []) as Book[]);
 
-  const [{ data: cats }, { data: txns }] = await Promise.all([
+  const [{ data: cats }, { data: catCounts }] = await Promise.all([
     admin
       .from("categories")
       .select(
@@ -36,17 +36,21 @@ export default async function CategoriesSettingsPage() {
       .order("book")
       .order("sort_order")
       .order("name"),
-    admin
-      .from("transactions")
-      .select("category_id, book")
-      .in("book", allowed),
+    // Aggregate via RPC — previously pulled (category_id, book) for every
+    // transaction and counted in JS, which silently capped at 1000 rows and
+    // produced wrong counts for any user with more than ~1000 txns.
+    admin.rpc("category_txn_counts", { p_books: allowed }),
   ]);
 
-  // Per-category transaction counts (null-safe).
+  // Per-category transaction counts (null-safe; uncategorized rows have
+  // category_id = null and are ignored for per-category labels).
   const counts = new Map<string, number>();
-  for (const row of (txns ?? []) as { category_id: string | null }[]) {
+  for (const row of (catCounts ?? []) as Array<{
+    category_id: string | null;
+    txn_count: number;
+  }>) {
     if (!row.category_id) continue;
-    counts.set(row.category_id, (counts.get(row.category_id) ?? 0) + 1);
+    counts.set(row.category_id, row.txn_count);
   }
 
   const categoriesWithCounts = ((cats ?? []) as Array<{

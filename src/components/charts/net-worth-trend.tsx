@@ -22,19 +22,16 @@ interface AccountLite {
   current_balance: number | string;
 }
 
-interface TxnLite {
+export interface MonthlyFlowRow {
   book: Book;
-  date: string;
-  amount: number | string;
-  is_income: boolean;
-  account_id: string | null;
-  split_parent_id?: string | null;
-  id: string;
+  year_month: string; // "YYYY-MM"
+  income_total: number | string;
+  expense_total: number | string;
 }
 
 interface Props {
   accounts: AccountLite[];
-  transactions: TxnLite[];
+  monthlyFlows: MonthlyFlowRow[];
   months?: number;
 }
 
@@ -42,21 +39,17 @@ interface Props {
  * Approximate end-of-month net worth per book by walking backwards from the
  * current balance and unwinding cash flows. For each account we take the
  * current balance and subtract subsequent income or add subsequent expenses
- * (depository logic) to arrive at a rough historical value. Not a perfect
- * reconstruction — institutions can adjust fees, interest, etc. — but close
- * enough for a trend line that shows where net worth is heading.
+ * (depository logic) to arrive at a rough historical value.
+ *
+ * Inputs are pre-aggregated by the monthly_flows RPC so this component scales
+ * to arbitrarily long histories without bumping the 1000-row query cap.
  */
 export function NetWorthTrend({
   accounts,
-  transactions,
+  monthlyFlows,
   months = 12,
 }: Props) {
   const data = useMemo(() => {
-    const childParents = new Set<string>();
-    for (const t of transactions) {
-      if (t.split_parent_id) childParents.add(t.split_parent_id);
-    }
-
     // Current net-worth per book (signed: assets +, liabilities -).
     const isLiability = (type: string) => type === "credit" || type === "loan";
     const currentByBook: Record<Book, number> = {
@@ -69,8 +62,8 @@ export function NetWorthTrend({
       currentByBook[a.book] += isLiability(a.type) ? -bal : bal;
     }
 
-    // Aggregate net cash flow per month per book from the transactions. For a
-    // reverse walk, income = reduce balance going backward, expense = increase.
+    // Build month axis and seed flows. RPC returns per-(book, month); missing
+    // months (no activity) stay at zero.
     type MonthKey = string; // YYYY-MM
     const axis: MonthKey[] = [];
     const today = new Date();
@@ -88,13 +81,12 @@ export function NetWorthTrend({
     for (const key of axis) {
       netByMonthBook[key] = { personal: 0, business: 0, nonprofit: 0 };
     }
-    for (const t of transactions) {
-      if (t.id && childParents.has(t.id)) continue;
-      const key = t.date.slice(0, 7);
-      if (!netByMonthBook[key]) continue;
-      const v = Math.abs(Number(t.amount));
-      // For net worth: income raises it, expense lowers it (depository side).
-      netByMonthBook[key][t.book] += t.is_income ? v : -v;
+    for (const row of monthlyFlows) {
+      if (!netByMonthBook[row.year_month]) continue;
+      // For net worth: income raises it (+income_total), expense lowers it
+      // (-expense_total) on the depository side.
+      netByMonthBook[row.year_month][row.book] +=
+        Number(row.income_total) - Number(row.expense_total);
     }
 
     // Build series: for each axis month end, compute net worth at that point.
@@ -137,7 +129,7 @@ export function NetWorthTrend({
     }
 
     return series;
-  }, [accounts, transactions, months]);
+  }, [accounts, monthlyFlows, months]);
 
   return (
     <div>

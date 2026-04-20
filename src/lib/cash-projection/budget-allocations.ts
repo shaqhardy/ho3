@@ -1,8 +1,13 @@
 import type { Book } from "@/lib/types";
+import type {
+  DetailBudgetAllocation,
+  DetailBudgetSegment,
+} from "./detail-types";
 
 export interface BudgetRow {
   id: string;
   book: Book;
+  name: string;
   period: string;
   period_start_date: string | null;
   period_end_date: string | null;
@@ -38,6 +43,21 @@ function parseYmd(ymd: string): Date {
 function daysInMonth(year: number, monthZeroBased: number): number {
   return new Date(Date.UTC(year, monthZeroBased + 1, 0)).getUTCDate();
 }
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 interface MonthOverlap {
   year: number;
@@ -102,24 +122,32 @@ function monthOverlaps(
       m = 0;
       y += 1;
     }
-    if (y > end.getUTCFullYear() + 1) break; // safety
+    if (y > end.getUTCFullYear() + 1) break;
   }
 
   return out;
 }
 
+function monthlyNormalize(period: string, amount: number): number {
+  switch (period) {
+    case "weekly":
+      return amount * 4.345;
+    case "biweekly":
+      return amount * 2.1725;
+    case "quarterly":
+      return amount / 3;
+    case "yearly":
+      return amount / 12;
+    case "monthly":
+    case "custom":
+    default:
+      return amount;
+  }
+}
+
 /**
- * Compute expected budget-allocation expense for a set of active budgets
- * over a window, prorated for partial months and for the current month.
- *
- * For the current month, uses remaining allocation = max(0, allocated - spent)
- * and prorates by days-from-today-in-window / days-remaining-in-month.
- *
- * Fully past months in a backward window (e.g. YTD) are excluded because
- * posted transactions already captured what actually happened.
- *
- * Per §5c, bills assigned to a matching category are subtracted to avoid
- * double-counting — callers pass `billSumByCategory` from the bills query.
+ * Compute total expected budget-allocation expense in window, aggregated.
+ * Kept for the fast summary path (no detail=true).
  */
 export function expectedBudgetExpenses(
   budgets: BudgetRow[],
@@ -130,79 +158,148 @@ export function expectedBudgetExpenses(
   spentThisMonth: CategorySpendMap,
   dedup: BudgetDedup
 ): number {
-  const monthlyEquivalent: Map<string, number> = new Map();
-  for (const cat of categories) {
-    if (!cat.category_id) continue;
-    const b = budgets.find((bud) => bud.id === cat.budget_id);
-    if (!b || !b.is_active) continue;
-    const amount = Number(cat.allocated_amount);
-    if (!(amount > 0)) continue;
+  const details = expectedBudgetExpensesDetailed(
+    budgets,
+    categories,
+    windowStart,
+    windowEnd,
+    today,
+    spentThisMonth,
+    dedup
+  );
+  return details.reduce((s, d) => s + d.final_total, 0);
+}
 
-    // Normalize allocation to a monthly amount.
-    let monthly = amount;
-    switch (b.period) {
-      case "weekly":
-        monthly = amount * 4.345;
-        break;
-      case "biweekly":
-        monthly = amount * 2.1725;
-        break;
-      case "monthly":
-        monthly = amount;
-        break;
-      case "quarterly":
-        monthly = amount / 3;
-        break;
-      case "yearly":
-        monthly = amount / 12;
-        break;
-      case "custom":
-      default:
-        monthly = amount; // conservative: treat as monthly
-        break;
-    }
-
-    const prev = monthlyEquivalent.get(cat.category_id) ?? 0;
-    monthlyEquivalent.set(cat.category_id, prev + monthly);
-  }
-
+/**
+ * Compute per-category breakdown of the budget-allocation expense. For each
+ * category, emits the monthly-normalized amount, one segment per month
+ * overlap in the window, subtotal before dedup, bill-dedup offset, and
+ * final total. Drives the drill-down panel.
+ */
+export function expectedBudgetExpensesDetailed(
+  budgets: BudgetRow[],
+  categories: BudgetCategoryRow[],
+  windowStart: string,
+  windowEnd: string,
+  today: string,
+  spentThisMonth: CategorySpendMap,
+  dedup: BudgetDedup,
+  categoryNames: Map<string, string> = new Map()
+): DetailBudgetAllocation[] {
   const overlaps = monthOverlaps(windowStart, windowEnd, today);
-  if (overlaps.length === 0) return 0;
+  if (overlaps.length === 0) return [];
 
   const todayD = parseYmd(today);
+  const budgetById = new Map(budgets.map((b) => [b.id, b]));
+  const out: DetailBudgetAllocation[] = [];
 
-  let total = 0;
-  for (const [categoryId, monthly] of monthlyEquivalent.entries()) {
-    const billOffset = dedup.billSumByCategory.get(categoryId) ?? 0;
+  for (const cat of categories) {
+    if (!cat.category_id) continue;
+    const b = budgetById.get(cat.budget_id);
+    if (!b || !b.is_active) continue;
+    const allocated = Number(cat.allocated_amount);
+    if (!(allocated > 0)) continue;
+
+    const monthly = monthlyNormalize(b.period, allocated);
+    const segments: DetailBudgetSegment[] = [];
+    let subtotal = 0;
+
+    // Run-length encoding for consecutive fully-future months so the label
+    // reads "May–Sep full: $4,000" instead of five separate rows.
+    let runStart: MonthOverlap | null = null;
+    let runCount = 0;
+
+    const flushRun = () => {
+      if (runStart && runCount > 0) {
+        const label =
+          runCount === 1
+            ? `${MONTH_NAMES[runStart.month]} full`
+            : `${MONTH_NAMES[runStart.month]}–${
+                MONTH_NAMES[(runStart.month + runCount - 1) % 12]
+              } full`;
+        const amount = monthly * runCount;
+        segments.push({ label, amount });
+        subtotal += amount;
+      }
+      runStart = null;
+      runCount = 0;
+    };
+
     for (const ov of overlaps) {
-      if (ov.isFullyPast) continue; // past months already captured by txns
+      if (ov.isFullyPast) {
+        flushRun();
+        continue;
+      }
       if (ov.containsToday) {
-        const spent = spentThisMonth[categoryId] ?? 0;
+        flushRun();
+        const spent = spentThisMonth[cat.category_id] ?? 0;
         const remainingInMonth = Math.max(0, monthly - spent);
         const daysRemainingInMonth =
           Math.floor(
             (ov.lastDay.getTime() - todayD.getTime()) / 86_400_000
           ) + 1;
         if (daysRemainingInMonth <= 0) continue;
-        const daysInWindowFromToday = Math.floor(
-          (ov.overlapEnd.getTime() -
-            Math.max(todayD.getTime(), ov.overlapStart.getTime())) /
-            86_400_000
-        ) + 1;
+        const daysInWindowFromToday =
+          Math.floor(
+            (ov.overlapEnd.getTime() -
+              Math.max(todayD.getTime(), ov.overlapStart.getTime())) /
+              86_400_000
+          ) + 1;
         const fraction = Math.min(
           1,
           Math.max(0, daysInWindowFromToday / daysRemainingInMonth)
         );
-        total += remainingInMonth * fraction;
+        const amount = remainingInMonth * fraction;
+        segments.push({
+          label: `${MONTH_NAMES[ov.month]} remainder`,
+          amount,
+        });
+        subtotal += amount;
+      } else if (ov.overlapDays === ov.monthDays) {
+        // Fully future + full month → collapse into a run.
+        if (runStart === null) {
+          runStart = ov;
+          runCount = 1;
+        } else if (
+          ov.year === runStart.year &&
+          ov.month === runStart.month + runCount
+        ) {
+          runCount += 1;
+        } else {
+          flushRun();
+          runStart = ov;
+          runCount = 1;
+        }
       } else {
-        // Fully future month: scale by overlap days / month days.
-        total += monthly * (ov.overlapDays / ov.monthDays);
+        flushRun();
+        // Fully future but partial overlap (edge of window).
+        const amount = monthly * (ov.overlapDays / ov.monthDays);
+        segments.push({
+          label: `${MONTH_NAMES[ov.month]} prorated (${ov.overlapDays}/${ov.monthDays})`,
+          amount,
+        });
+        subtotal += amount;
       }
     }
-    // Subtract bill dedup for this category once (already in dollars),
-    // prorated across the window's forward months proportionally.
-    total -= billOffset;
+    flushRun();
+
+    const billDedup = dedup.billSumByCategory.get(cat.category_id) ?? 0;
+    const finalTotal = Math.max(0, subtotal - billDedup);
+
+    out.push({
+      budget_id: b.id,
+      budget_name: b.name,
+      book: b.book,
+      category_id: cat.category_id,
+      category_name:
+        categoryNames.get(cat.category_id) ?? null,
+      monthly_allocated: monthly,
+      segments,
+      subtotal,
+      bill_dedup_applied: billDedup,
+      final_total: finalTotal,
+    });
   }
 
-  return Math.max(0, total);
+  return out;
 }

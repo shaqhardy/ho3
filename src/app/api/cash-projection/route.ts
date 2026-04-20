@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const bookParam = (sp.get("book") ?? "personal") as Book | "all";
   const windowParam = (sp.get("window") ?? "month") as CashWindow;
   const modeParam = (sp.get("mode") ?? "projected") as CashMode;
+  const includeDetail = sp.get("detail") === "true";
 
   if (bookParam !== "all" && !BOOKS.includes(bookParam as Book))
     return NextResponse.json({ error: "invalid book" }, { status: 400 });
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
       windowLabel: windowLabel(windowParam),
       window: windowParam,
       mode: modeParam,
+      includeDetail,
     });
     return NextResponse.json(result);
   } catch (err) {

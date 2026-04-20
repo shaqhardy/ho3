@@ -1,4 +1,5 @@
 import type { IncomeClassification } from "@/lib/types";
+import type { CashProjectionDetail } from "@/lib/cash-projection/detail-types";
 
 export type CashWindow = "month" | "quarter" | "6mo" | "9mo" | "year" | "ytd";
 export type CashMode = "live" | "scheduled" | "projected";
@@ -30,6 +31,7 @@ export interface CashProjectionResponse {
   window: { start: string; end: string; label: string };
   mode: CashMode;
   book_scope: string;
+  detail?: CashProjectionDetail;
 }
 
 export const CASH_WINDOWS: { value: CashWindow; label: string }[] = [

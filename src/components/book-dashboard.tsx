@@ -192,7 +192,6 @@ export function BookDashboard({
                     <Card>
                       <IncomeVsExpenses
                         transactions={transactions as unknown as Parameters<typeof IncomeVsExpenses>[0]["transactions"]}
-                        months={6}
                       />
                     </Card>
                   </div>

@@ -284,7 +284,6 @@ export function PersonalDashboard({
           <Card>
             <IncomeVsExpenses
               transactions={transactions as Parameters<typeof IncomeVsExpenses>[0]["transactions"]}
-              months={6}
             />
           </Card>
         </div>

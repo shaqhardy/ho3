@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
+import { Card, StatCard } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { formatCurrency, formatDate, formatRelativeDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
@@ -12,11 +12,6 @@ import { EmptyState } from "@/components/empty-state";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { Plus, RotateCw, Pause, Beaker } from "lucide-react";
 import Link from "next/link";
-import {
-  netWorth as computeNetWorth,
-  totalAssets as computeTotalAssets,
-  totalLiabilities as computeTotalLiabilities,
-} from "@/lib/accounts/money";
 import { BOOK_LABELS } from "@/lib/books";
 import { CategoryDonut } from "@/components/charts/category-donut";
 import { IncomeVsExpenses } from "@/components/charts/income-vs-expenses";
@@ -53,15 +48,6 @@ export function BookDashboard({
 
     return (
       <div className="has-bottom-nav space-y-6">
-        <header className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <p className="label-sm">Book</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              {bookLabel}
-            </h1>
-          </div>
-          <PlaidLinkButton book={book} label="Connect Bank Account" />
-        </header>
         <EmptyState
           title={`Start tracking ${bookLabel}`}
           description={description}
@@ -77,19 +63,6 @@ export function BookDashboard({
       </div>
     );
   }
-
-  // Net worth = assets − liabilities for this book.
-  const netWorth = computeNetWorth(accounts);
-  const bookAssets = computeTotalAssets(accounts);
-  const bookLiabilities = computeTotalLiabilities(accounts);
-
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStr = monthStart.toISOString().split("T")[0];
-
-  const monthExpenses = transactions
-    .filter((t) => !t.is_income && t.date >= monthStr)
-    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const totalMonthlySubs = subscriptions
     .filter((s) => s.is_active)
@@ -108,6 +81,10 @@ export function BookDashboard({
         new Date(a.next_charge_date).getTime() -
         new Date(b.next_charge_date).getTime()
     );
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  const monthStr = monthStart.toISOString().split("T")[0];
 
   // Group expenses by category
   const expensesByCategory = transactions
@@ -151,21 +128,8 @@ export function BookDashboard({
     { id: "subscriptions", label: "Subscriptions", count: upcomingSubs.length },
   ];
 
-  const bookAccent: "blue" | "green" | "terracotta" =
-    book === "business" ? "blue" : book === "nonprofit" ? "green" : "terracotta";
-
   return (
     <div className="has-bottom-nav space-y-8">
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <p className="label-sm">Book</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {bookLabel}
-          </h1>
-        </div>
-        <PlaidLinkButton book={book} label="Connect Bank Account" />
-      </header>
-
       <section>
         <div className="mb-3">
           <h2 className="label-sm">Quick Actions</h2>
@@ -198,40 +162,6 @@ export function BookDashboard({
           <>
             {tab === "overview" && (
               <div className="space-y-8">
-                <ElevatedCard accent={bookAccent}>
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="label-sm">Net Worth</p>
-                      <p
-                        className={`mt-2 hero-value ${netWorth >= 0 ? "text-foreground" : "text-deficit"}`}
-                      >
-                        {formatCurrency(netWorth)}
-                      </p>
-                      <p className="mt-2 text-xs text-muted num">
-                        <span className="text-surplus">
-                          {formatCurrency(bookAssets)}
-                        </span>{" "}
-                        assets
-                        {bookLiabilities > 0 && (
-                          <>
-                            {" · "}
-                            <span className="text-deficit">
-                              {formatCurrency(bookLiabilities)}
-                            </span>{" "}
-                            owed
-                          </>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-start sm:items-end">
-                      <p className="label-sm">This Month&apos;s Expenses</p>
-                      <p className="mt-2 display-value text-deficit">
-                        {formatCurrency(monthExpenses)}
-                      </p>
-                    </div>
-                  </div>
-                </ElevatedCard>
-
                 <div>
                   <div className="mb-3">
                     <h2 className="label-sm">Monthly Commitments</h2>

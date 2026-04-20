@@ -18,6 +18,9 @@ export interface CashProjectionHeaderProps {
   onModeChange: (m: CashMode) => void;
 }
 
+const toggleBase =
+  "h-9 rounded-lg border px-3 text-xs font-medium transition-colors";
+
 export function CashProjectionHeader({
   window: currentWindow,
   mode,
@@ -37,13 +40,13 @@ export function CashProjectionHeader({
 
   return (
     <div
-      className={`sticky top-0 z-30 rounded-xl border border-border bg-card p-3 transition-shadow ${
+      className={`sticky top-0 z-30 rounded-xl border border-border-subtle bg-card p-3 transition-shadow ${
         scrolled ? "shadow-lg" : "shadow-sm"
       }`}
     >
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted">
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-3">
+          <span className="w-16 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
             Window
           </span>
           <div className="flex flex-wrap items-center gap-1 overflow-x-auto">
@@ -54,7 +57,7 @@ export function CashProjectionHeader({
                   key={w.value}
                   type="button"
                   onClick={() => onWindowChange(w.value)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`${toggleBase} ${
                     active
                       ? "border-terracotta bg-terracotta text-white"
                       : "border-border-subtle bg-card text-foreground hover:bg-card-hover"
@@ -66,8 +69,8 @@ export function CashProjectionHeader({
             })}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted">
+        <div className="flex items-center gap-3">
+          <span className="w-16 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
             Mode
           </span>
           <div className="flex flex-wrap items-center gap-1">
@@ -78,7 +81,7 @@ export function CashProjectionHeader({
                   key={m.value}
                   type="button"
                   onClick={() => onModeChange(m.value)}
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`${toggleBase} ${
                     active
                       ? "border-accent-blue bg-accent-blue/10 text-accent-blue"
                       : "border-border-subtle bg-card text-foreground hover:bg-card-hover"

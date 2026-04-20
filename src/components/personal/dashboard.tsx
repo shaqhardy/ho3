@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, ElevatedCard, StatCard } from "@/components/ui/card";
+import { Card, StatCard } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { AccountsList } from "@/components/personal/accounts-list";
 import { TransactionsList } from "@/components/personal/transactions-list";
@@ -16,7 +16,6 @@ import type {
   Category,
   ProjectedIncome,
 } from "@/lib/types";
-import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { EmptyState } from "@/components/empty-state";
 import Link from "next/link";
 import { Beaker } from "lucide-react";
@@ -45,16 +44,6 @@ export function PersonalDashboard({
   if (accounts.length === 0) {
     return (
       <div className="has-bottom-nav space-y-6">
-        <header className="flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <p className="label-sm">Book</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-              Personal
-            </h1>
-          </div>
-          <PlaidLinkButton book="personal" />
-        </header>
-
         <EmptyState
           title="Get started with your Personal book"
           description="Connect a bank account to see transactions, categorize spending, track bills, and watch your plan update daily."
@@ -77,25 +66,6 @@ export function PersonalDashboard({
       </div>
     );
   }
-
-  const totalCash = accounts
-    .filter((a) => a.type === "depository")
-    .reduce((sum, a) => sum + Number(a.current_balance), 0);
-
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const monthStr = monthStart.toISOString().split("T")[0];
-
-  const monthExpenses = transactions
-    .filter((t) => !t.is_income && t.date >= monthStr)
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const monthIncome = transactions
-    .filter((t) => t.is_income && t.date >= monthStr)
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const surplus = monthIncome - monthExpenses;
 
   const totalMonthlySubscriptions = subscriptions
     .filter((s) => s.is_active)
@@ -167,41 +137,6 @@ export function PersonalDashboard({
 
   return (
     <div className="has-bottom-nav space-y-8">
-      {/* Page header */}
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <p className="label-sm">Book</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Personal
-          </h1>
-        </div>
-        <PlaidLinkButton book="personal" />
-      </header>
-
-      {/* Hero cash card */}
-      <ElevatedCard accent="terracotta">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="label-sm">Current Cash</p>
-            <p className="mt-2 hero-value text-foreground">
-              {formatCurrency(totalCash)}
-            </p>
-          </div>
-          <div className="flex flex-col items-start sm:items-end">
-            <p className="label-sm">This Month</p>
-            <p
-              className={`mt-2 display-value ${surplus >= 0 ? "text-surplus" : "text-deficit"}`}
-            >
-              {surplus >= 0 ? "+" : ""}
-              {formatCurrency(surplus)}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              {surplus >= 0 ? "surplus" : "deficit"}
-            </p>
-          </div>
-        </div>
-      </ElevatedCard>
-
       {/* Stat row — every card links to its detail page. */}
       <section>
         <div className="mb-3 flex items-center justify-between">

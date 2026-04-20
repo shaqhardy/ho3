@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PersonalDashboard } from "@/components/personal/dashboard";
 import { CashProjectionSection } from "@/components/cash-projection/cash-projection-section";
+import { BookPageHeader } from "@/components/book-page-header";
 
 export default async function PersonalPage() {
   const supabase = await createClient();
@@ -64,6 +65,7 @@ export default async function PersonalPage() {
 
   return (
     <div className="space-y-6">
+      <BookPageHeader book="personal" label="Personal" />
       <CashProjectionSection book="personal" hasData={hasData} />
       <PersonalDashboard
         accounts={accounts || []}

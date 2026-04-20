@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BookDashboard } from "@/components/book-dashboard";
 import { CashProjectionSection } from "@/components/cash-projection/cash-projection-section";
+import { BookPageHeader } from "@/components/book-page-header";
 
 export default async function BusinessPage() {
   const supabase = await createClient();
@@ -48,6 +49,7 @@ export default async function BusinessPage() {
 
   return (
     <div className="space-y-6">
+      <BookPageHeader book="business" label="Business" />
       <CashProjectionSection book="business" hasData={hasData} />
       <BookDashboard
         book="business"

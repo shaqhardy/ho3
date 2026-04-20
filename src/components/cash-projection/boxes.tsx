@@ -19,8 +19,8 @@ function modeLabel(mode: string): string {
 }
 
 /**
- * Clickable wrapper around the projection boxes. role=button + keyboard
- * handlers + hover affordance + info icon top-right to telegraph "click me".
+ * Shared clickable wrapper. role=button + Enter/Space + hover lift + info
+ * icon in the top-right to telegraph "click me".
  */
 function ClickableCard({
   onClick,
@@ -49,17 +49,34 @@ function ClickableCard({
     >
       <Card
         interactive
-        className={`transition-transform group-hover:-translate-y-[1px] ${className}`}
+        className={`flex min-h-[200px] flex-col justify-between p-6 transition-transform group-hover:-translate-y-[1px] sm:min-h-[220px] ${className}`}
       >
         <span
           aria-hidden
-          className="absolute right-3 top-3 text-muted opacity-60 transition-opacity group-hover:opacity-100"
+          className="absolute right-4 top-4 text-muted opacity-50 transition-opacity group-hover:opacity-100"
         >
-          <Info className="h-3.5 w-3.5" />
+          <Info className="h-4 w-4" />
         </span>
         {children}
       </Card>
     </div>
+  );
+}
+
+// Headline number sizing — bumped ~17% over display-value across the board,
+// Combined goes another ~20% on top to anchor the page.
+const headlineCls =
+  "text-[2rem] leading-none font-bold tabular-nums tracking-tight sm:text-[2.375rem]";
+const combinedHeadlineCls =
+  "text-[2.5rem] leading-none font-bold tabular-nums tracking-tight sm:text-[3rem]";
+
+function MetaLine({ mode, windowLabel }: { mode: string; windowLabel: string }) {
+  return (
+    <p className="text-xs text-muted">
+      <span className="font-medium text-foreground/80">{modeLabel(mode)}</span>
+      <span className="mx-1.5 text-muted">·</span>
+      <span>{windowLabel}</span>
+    </p>
   );
 }
 
@@ -81,12 +98,16 @@ export function CashBox({
       onClick={onClick}
       ariaLabel={`Cash breakdown for ${modeLabel(mode)} over ${windowLabel}`}
     >
-      <p className="label-sm">Cash</p>
-      <p className="display-value text-foreground">{formatCurrency(amount)}</p>
-      <p className="mt-1 text-xs text-muted">
-        {modeLabel(mode)} · {windowLabel}
-      </p>
-      {subtext && <p className="text-xs text-muted num">{subtext}</p>}
+      <div>
+        <p className="label-sm">Cash</p>
+        <p className={`mt-3 text-foreground ${headlineCls}`}>
+          {formatCurrency(amount)}
+        </p>
+      </div>
+      <div className="mt-4 space-y-1">
+        <MetaLine mode={mode} windowLabel={windowLabel} />
+        {subtext && <p className="num text-xs text-muted">{subtext}</p>}
+      </div>
     </ClickableCard>
   );
 }
@@ -107,22 +128,32 @@ export function IncomeBox({
   onClick: () => void;
 }) {
   const showSplit = pastConfirmed > 0 && futureProjected > 0;
+  const isEmpty = amount === 0;
   return (
     <ClickableCard
       onClick={onClick}
       ariaLabel={`Income breakdown for ${modeLabel(mode)} over ${windowLabel}`}
     >
-      <p className="label-sm">Income</p>
-      <p className="display-value text-foreground">{formatCurrency(amount)}</p>
-      <p className="mt-1 text-xs text-muted">
-        {modeLabel(mode)} · {windowLabel}
-      </p>
-      {showSplit && (
-        <p className="text-xs text-muted num">
-          {formatCurrency(pastConfirmed)} received +{" "}
-          {formatCurrency(futureProjected)} projected
+      <div>
+        <p className="label-sm">Income</p>
+        <p className={`mt-3 text-foreground ${headlineCls}`}>
+          {formatCurrency(amount)}
         </p>
-      )}
+      </div>
+      <div className="mt-4 space-y-1">
+        <MetaLine mode={mode} windowLabel={windowLabel} />
+        {showSplit && (
+          <p className="num text-xs text-muted">
+            {formatCurrency(pastConfirmed)} received +{" "}
+            {formatCurrency(futureProjected)} projected
+          </p>
+        )}
+        {isEmpty && (
+          <p className="text-xs text-muted">
+            No income logged or projected in this window.
+          </p>
+        )}
+      </div>
     </ClickableCard>
   );
 }
@@ -140,25 +171,39 @@ export function CombinedBox({
   windowLabel: string;
   onClick: () => void;
 }) {
+  const ringCls = isDeficit
+    ? "ring-2 ring-inset ring-deficit/40"
+    : "ring-2 ring-inset ring-surplus/40";
   const tint = isDeficit
-    ? "bg-deficit/10 border-deficit/40"
-    : "bg-surplus/10 border-surplus/40";
+    ? "bg-deficit/5 border-deficit/30"
+    : "bg-surplus/5 border-surplus/30";
   const valueCls = isDeficit ? "text-deficit" : "text-surplus";
-  const label = isDeficit ? "Deficit" : "Surplus";
+  const caption = isDeficit ? "Deficit" : "Surplus";
   return (
     <ClickableCard
       onClick={onClick}
-      className={tint}
-      ariaLabel={`${label} breakdown for ${modeLabel(mode)} over ${windowLabel}`}
+      className={`${tint} ${ringCls}`}
+      ariaLabel={`Combined ${caption.toLowerCase()} breakdown for ${modeLabel(
+        mode
+      )} over ${windowLabel}`}
     >
-      <p className="label-sm">{label}</p>
-      <p className={`display-value ${valueCls}`}>
-        {isDeficit ? "-" : "+"}
-        {formatCurrency(Math.abs(amount))}
-      </p>
-      <p className="mt-1 text-xs text-muted">
-        {modeLabel(mode)} · {windowLabel}
-      </p>
+      <div>
+        <p className="label-sm">Combined</p>
+        <p className={`mt-3 ${valueCls} ${combinedHeadlineCls}`}>
+          {isDeficit ? "-" : "+"}
+          {formatCurrency(Math.abs(amount))}
+        </p>
+        <p
+          className={`mt-1.5 text-[11px] font-medium uppercase tracking-[0.14em] ${
+            isDeficit ? "text-deficit/80" : "text-surplus/80"
+          }`}
+        >
+          {caption}
+        </p>
+      </div>
+      <div className="mt-4">
+        <MetaLine mode={mode} windowLabel={windowLabel} />
+      </div>
     </ClickableCard>
   );
 }
@@ -210,10 +255,10 @@ export function CashProjectionSkeleton() {
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {[0, 1, 2].map((i) => (
-        <Card key={i} className="flex flex-col gap-2">
+        <Card key={i} className="flex min-h-[200px] flex-col gap-3 p-6 sm:min-h-[220px]">
           <div className="h-3 w-16 animate-pulse rounded bg-border-subtle" />
-          <div className="h-9 w-32 animate-pulse rounded bg-border-subtle" />
-          <div className="h-3 w-24 animate-pulse rounded bg-border-subtle" />
+          <div className="h-10 w-32 animate-pulse rounded bg-border-subtle" />
+          <div className="mt-auto h-3 w-24 animate-pulse rounded bg-border-subtle" />
         </Card>
       ))}
     </div>
